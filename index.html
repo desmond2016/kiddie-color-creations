@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8"> <!-- 注意这里是 UTF-8 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kiddie Color Creations - 发现魔法森林的色彩</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- 可以考虑引入一个图标库，例如 Font Awesome，用于月亮图标 -->
+    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"> -->
+</head>
+<body>
+    <header class="site-header">
+        <div class="container header-container">
+            <div class="logo">
+                Kiddie Color Creations <span class="logo-subtitle">儿童涂色乐园</span>
+            </div>
+            <nav class="main-nav">
+                <ul>
+                    <li><a href="#">首页</a></li>
+                    <li><a href="#">画作集</a></li>
+                    <li><a href="#">关于我们</a></li>
+                </ul>
+                <button class="theme-toggle" aria-label="切换主题">
+                    <!-- 月亮图标，可以用 SVG, Font Icon 或者一个字符 🌙 -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero-section">
+            <div class="container">
+                <h1>发现魔法森林的色彩</h1>
+                <p>踏上一场奇妙的探索之旅，用你的想象力为神秘的独角兽世界添加绚丽色彩。让创意在指尖绽放！</p>
+                <a href="#coloring-section" class="scroll-down-arrow" aria-label="滚动到涂色区域">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </a>
+            </div>
+        </section>
+
+        <section class="coloring-page" id="coloring-section">
+            <div class="container">
+                <h2>独角兽漫步森林</h2>
+                <p class="section-subtitle">一只神秘的独角兽在魔法森林中漫步，等待你的创意点缀</p>
+
+                <div class="image-container">
+                    <img src="images/unicorn_bw.png" alt="独角兽森林黑白线稿" id="main-coloring-image">
+                    <img src="images/unicorn_color_ref.png" alt="彩色参考图" id="color-reference-image">
+                </div>
+
+                <div class="info-box description">
+                    <p><strong>场景描述：</strong></p>
+                    <p>一只独角兽漫步在森林的草地上，阳光明媚，蓝天白云。它的角闪烁着神秘的光芒，仿佛蕴含着魔法的力量。</p>
+                </div>
+
+                <a href="images/unicorn_bw.png" download="Unicorn_Forest_Coloring_Page.png" class="download-button">
+                    下载A4打印稿
+                </a>
+
+                <div class="info-box printing-tip">
+                    <p><strong>打印提示：</strong> 为获得最佳效果，请在打印机设置中选择“无边距打印”或“满幅面打印”！</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="color-palette-section">
+            <div class="container">
+                <h2>推荐配色方案</h2>
+                <p class="section-subtitle">点击下方颜色块，获取灵感</p>
+                <div class="color-swatches">
+                    <span class="swatch" style="background-color: #FFC0CB;" title="粉色"></span> <!-- 粉色 -->
+                    <span class="swatch" style="background-color: #DA70D6;" title="紫色"></span> <!-- 紫色 -->
+                    <span class="swatch" style="background-color: #87CEEB;" title="蓝色"></span> <!-- 蓝色 -->
+                    <span class="swatch" style="background-color: #AFEEEE;" title="青色"></span> <!-- 青色 -->
+                    <span class="swatch" style="background-color: #90EE90;" title="绿色"></span> <!-- 绿色 -->
+                    <span class="swatch" style="background-color: #FFFFE0;" title="黄色"></span> <!-- 黄色 -->
+                    <span class="swatch" style="background-color: #FFA07A;" title="橙色"></span> <!-- 橙色 -->
+                    <span class="swatch" style="background-color: #F08080;" title="红色"></span> <!-- 红色 -->
+                </div>
+                <p class="palette-tip">
+                    <strong>贴心提示：</strong>独角兽通常有白色或浅色的身体，粉色或紫色的鬃毛和尾巴，金色的角。你也可以尝试用彩虹色来装饰它，让它更有魔法感！
+                </p>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <p>&copy; <span id="current-year">2023</span> Kiddie Color Creations. 版权所有。</p>
+            <!-- 底部可能有动态光点效果，这个需要JS或复杂的CSS动画 -->
+        </div>
+    </footer>
+    <script>
+        document.getElementById('current-year').textContent = new Date().getFullYear();
+    </script>
+</body>
+</html>
