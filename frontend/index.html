@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kiddie Color Creations - 发现魔法森林的色彩</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="container header-container">
+            <div class="logo">
+                Kiddie Color Creations <span class="logo-subtitle">儿童涂色乐园</span>
+            </div>
+            <nav class="main-nav">
+                <ul>
+                    <li><a href="#">首页</a></li>
+                    <li><a href="#">画作集</a></li>
+                    <li><a href="#">关于我们</a></li>
+                </ul>
+                <button class="theme-toggle" aria-label="切换主题">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero-section">
+            <div class="container">
+                <h1>发现魔法森林的色彩</h1>
+                <p>踏上一场奇妙的探索之旅，用你的想象力为神秘的独角兽世界添加绚丽色彩。让创意在指尖绽放！</p>
+                <a href="#coloring-section" class="scroll-down-arrow" aria-label="滚动到涂色区域">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </a>
+            </div>
+        </section>
+
+        <section class="coloring-page" id="coloring-section">
+            <div class="container">
+                <h2>发挥你的想象力！</h2>
+                <p class="section-subtitle">输入你想要画的场景，让魔法为你生成专属涂色线条画</p>
+
+                <div class="image-container">
+                    <img src="https://storage.googleapis.com/gemini-common-pro-usercontent/img/62e0a5f9b35d5d40_570.png" alt="涂色线条画" id="main-coloring-image">
+                     <div class="loading-overlay" id="loading-indicator" style="display: none;">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>正在生成线条画...</p>
+                    </div>
+                    <img src="https://storage.googleapis.com/gemini-common-pro-usercontent/img/b31e3156f81e600b_120.png" alt="彩色参考图" id="color-reference-image">
+                </div>
+
+                <div class="info-box description generation-controls">
+                    <p><strong>图片描述：</strong></p>
+                    <input type="text" id="prompt-input" placeholder="例如：一只戴着帽子的可爱小猫">
+                    <button id="generate-button">
+                        <i class="fas fa-magic"></i> 生成线条画
+                    </button>
+                    <p id="error-message" class="error-text" style="display: none;"></p> </div>
+
+                <a href="https://storage.googleapis.com/gemini-common-pro-usercontent/img/62e0a5f9b35d5d40_570.png" download="Coloring_Page.png" class="download-button" id="download-link">
+                    下载A4打印稿
+                </a>
+
+                <div class="info-box printing-tip">
+                    <p><strong>打印提示：</strong> 为获得最佳效果，请在打印机设置中选择“无边距打印”或“满幅面打印”！</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="color-palette-section">
+            <div class="container">
+                <h2>推荐配色方案</h2>
+                <p class="section-subtitle">点击下方颜色块，获取灵感</p>
+                <div class="color-swatches">
+                    <span class="swatch" style="background-color: #FFC0CB;" title="粉色"></span> <span class="swatch" style="background-color: #DA70D6;" title="紫色"></span> <span class="swatch" style="background-color: #87CEEB;" title="蓝色"></span> <span class="swatch" style="background-color: #AFEEEE;" title="青色"></span> <span class="swatch" style="background-color: #90EE90;" title="绿色"></span> <span class="swatch" style="background-color: #FFFFE0;" title="黄色"></span> <span class="swatch" style="background-color: #FFA07A;" title="橙色"></span> <span class="swatch" style="background-color: #F08080;" title="红色"></span> </div>
+                <p class="palette-tip">
+                    <strong>贴心提示：</strong>发挥你的创意，为生成的线条画涂上独一无二的色彩吧！
+                </p>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <p>&copy; <span id="current-year">2023</span> Kiddie Color Creations. 版权所有。</p>
+        </div>
+    </footer>
+
+    <script>
+        // 设置当前年份
+        document.getElementById('current-year').textContent = new Date().getFullYear();
+
+        // 获取需要的 DOM 元素
+        const promptInput = document.getElementById('prompt-input');
+        const generateButton = document.getElementById('generate-button');
+        const mainImage = document.getElementById('main-coloring-image');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const downloadLink = document.getElementById('download-link');
+        const errorMessage = document.getElementById('error-message');
+
+        // 为生成按钮添加点击事件监听器
+        generateButton.addEventListener('click', async () => { // 使用 async 方便使用 await
+            const prompt = promptInput.value.trim();
+
+            // 验证输入
+            if (!prompt) {
+                errorMessage.textContent = '请输入图片描述！';
+                errorMessage.style.display = 'block';
+                promptInput.focus();
+                return;
+            } else {
+                errorMessage.style.display = 'none';
+            }
+
+            // --- 开始调用后端 API ---
+            console.log('准备发送给后端的提示词:', prompt);
+
+            // 1. 显示加载状态
+            loadingIndicator.style.display = 'flex';
+            mainImage.style.opacity = '0.5';
+            generateButton.disabled = true;
+            generateButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 生成中...';
+            errorMessage.style.display = 'none'; // 清除旧错误
+
+            try {
+                // 2. 发送请求到你的后端服务器
+                //    将 URL 修改为后端服务器的实际地址和端口
+                const backendUrl = 'http://192.168.0.102:5000/api/generate-image'; // <--- 修改这里！
+                // 或者，如果前后端在同一台机器上测试，也可以用:
+                // const backendUrl = 'http://localhost:5000/api/generate-image';
+                console.log(`正在向后端发送请求: ${backendUrl}`); // 打印将要请求的 URL
+
+                const response = await fetch(backendUrl, { // 使用变量 backendUrl
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ prompt: prompt }) // 将提示词作为 JSON 发送
+                });
+
+                // 3. 检查后端响应是否成功
+                if (!response.ok) {
+                    // 如果后端返回错误状态码 (例如 4xx, 5xx)
+                    const errorData = await response.json().catch(() => ({ message: '无法解析错误信息' })); // 尝试解析错误信息
+                    throw new Error(errorData.message || `服务器错误: ${response.status}`);
+                }
+
+                // 4. 解析后端返回的 JSON 数据
+                const data = await response.json();
+
+                // 5. 检查后端返回的数据中是否包含图片 URL
+                if (data && data.imageUrl) {
+                    console.log('从后端获取到的图片 URL:', data.imageUrl);
+
+                    // 6. 更新图片和下载链接
+                    mainImage.src = data.imageUrl;
+                    mainImage.alt = `线条画: ${prompt}`;
+                    downloadLink.href = data.imageUrl; // 使用后端返回的真实 URL
+                    // 为下载链接生成一个基于提示词的文件名 (可选)
+                    const filename = `ColoringPage_${prompt.replace(/[^a-z0-9]/gi, '_').substring(0, 20)}.png`;
+                    downloadLink.download = filename;
+
+                } else {
+                    // 如果后端返回的数据格式不正确
+                    throw new Error('后端未返回有效的图片 URL');
+                }
+
+            } catch (error) {
+                // 7. 处理 fetch 调用或后端逻辑中发生的错误
+                console.error('调用后端 API 时出错:', error);
+                // 检查是否是网络错误 (例如后端未启动或地址错误)
+                if (error instanceof TypeError && error.message === 'Failed to fetch') {
+                     errorMessage.textContent = '无法连接到后端服务，请确保后端正在运行且地址正确。';
+                } else {
+                    errorMessage.textContent = `生成失败: ${error.message}`;
+                }
+                errorMessage.style.display = 'block';
+                // 可以考虑将图片恢复成默认状态或显示错误占位图
+                // mainImage.src = 'images/error_placeholder.png';
+                // downloadLink.href = '#';
+                // downloadLink.removeAttribute('download');
+
+            } finally {
+                // 8. 无论成功或失败，最后都隐藏加载状态，恢复按钮
+                loadingIndicator.style.display = 'none';
+                mainImage.style.opacity = '1';
+                generateButton.disabled = false;
+                generateButton.innerHTML = '<i class="fas fa-magic"></i> 生成线条画';
+            }
+            // --- 后端 API 调用结束 ---
+        });
+
+        // 可选：当图片加载完成后，确保移除半透明效果
+        mainImage.onload = () => {
+             mainImage.style.opacity = '1';
+        };
+        // 可选：处理图片加载错误 (例如 URL 无效)
+        mainImage.onerror = () => {
+            // 避免在 fetch 失败时重复显示错误
+            if (loadingIndicator.style.display === 'none') {
+                errorMessage.textContent = '图片加载失败，请检查图片链接是否有效。';
+                errorMessage.style.display = 'block';
+                mainImage.style.opacity = '1';
+            }
+             // 可以设置一个默认的错误图片
+            // mainImage.src = 'images/error_placeholder.png';
+        };
+
+    </script>
+</body>
+</html>

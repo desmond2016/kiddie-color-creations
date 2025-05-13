@@ -1,0 +1,5 @@
+# .gitignore 文件内容示例
+.env
+__pycache__/
+*.pyc
+# 其他需要忽略的文件或文件夹...

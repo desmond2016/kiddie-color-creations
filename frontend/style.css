@@ -11,6 +11,7 @@
     --bg-card-purple: rgba(30, 10, 50, 0.7); /* 卡片背景，带透明度 */
     --glow-text-shadow: 0 0 2px #fff, 0 0 5px var(--primary-glow-color), 0 0 8px var(--primary-glow-color);
     --glow-box-shadow: 0 0 10px var(--primary-glow-color);
+    --error-color: #ff6b6b; /* 错误信息颜色 */
 }
 
 body {
@@ -23,9 +24,6 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
-    /* 可以在body或特定元素上添加微妙的背景动画，如图片中的光点 */
-    /* background-image: radial-gradient(circle, rgba(255,0,255,0.1) 1px, transparent 1px);
-    background-size: 20px 20px; */
 }
 
 .container {
@@ -68,7 +66,7 @@ img {
     padding: 15px 0;
     border-bottom: 2px solid var(--primary-glow-color);
     box-shadow: 0 2px 10px rgba(var(--primary-glow-color), 0.3);
-    position: sticky; /* 可选：固定导航栏 */
+    position: sticky;
     top: 0;
     z-index: 100;
 }
@@ -94,11 +92,9 @@ img {
 }
 
 .main-nav {
-    /* 可能已有的其他样式 */
-    display: flex;         /* 确保有这个 */
-    align-items: center;   /* 确保有这个 */
-    gap: 20px;             /* 添加或修改这个 */
-    /* 可能已有的其他样式 */
+    display: flex;
+    align-items: center;
+    gap: 20px;
 }
 
 .main-nav ul {
@@ -106,8 +102,8 @@ img {
     padding: 0;
     margin: 0;
     display: flex;
-    align-items: center;   /* 确保有这个 */
-    gap: 25px;             /* 添加或修改这个，控制 li 之间的间距 */
+    align-items: center;
+    gap: 25px;
 }
 
 .main-nav li {
@@ -130,7 +126,6 @@ img {
     color: var(--text-color-light);
     cursor: pointer;
     padding: 5px;
-    /*margin-left: 20px;*/
     display: flex;
     align-items: center;
     justify-content: center;
@@ -145,34 +140,31 @@ img {
 }
 
 .hero-section {
-    min-height: calc(80vh - 80px); /* 减去头部大致高度 */
+    min-height: calc(80vh - 80px);
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     text-align: center;
     padding: 40px 0;
-    background: var(--bg-medium-purple); /* 可以添加渐变或纹理 */
-    /* background-image: linear-gradient(to bottom, var(--bg-dark-purple), var(--bg-medium-purple)); */
+    background: var(--bg-medium-purple);
 }
 
 .hero-section h1 {
-    font-size: clamp(2.5em, 6vw, 4.5em); /* 响应式字体 */
+    font-size: clamp(2.5em, 6vw, 4.5em);
     line-height: 1.2;
     margin-bottom: 20px;
-    /* 渐变文字，需要浏览器前缀 */
     background: linear-gradient(45deg, var(--primary-glow-color), var(--secondary-glow-color), #00ffff);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    text-fill-color: transparent; /* 标准属性 */
-    animation: hue-rotate 10s infinite linear; /* 可选的颜色动态效果 */
+    text-fill-color: transparent;
+    animation: hue-rotate 10s infinite linear;
 }
-/* 可选的文字颜色动态效果 */
+
 @keyframes hue-rotate {
     to { filter: hue-rotate(360deg); }
 }
-
 
 .hero-section p {
     font-size: clamp(1em, 2.5vw, 1.3em);
@@ -212,9 +204,9 @@ main {
     padding-bottom: 30px;
 }
 
-section { /* 为所有内容section添加一些通用边距 */
+section {
     padding: 40px 0;
-    margin-bottom: 30px; /* 增加区块间距 */
+    margin-bottom: 30px;
 }
 .section-subtitle {
     text-align: center;
@@ -226,7 +218,7 @@ section { /* 为所有内容section添加一些通用边距 */
 
 .coloring-page .container,
 .color-palette-section .container {
-    background-color: var(--bg-card-purple); /* 轻微的卡片背景 */
+    background-color: var(--bg-card-purple);
     padding: 30px;
     border-radius: 15px;
     box-shadow: 0 0 20px rgba(0,0,0,0.3), inset 0 0 10px rgba(var(--primary-glow-color),0.2);
@@ -234,37 +226,72 @@ section { /* 为所有内容section添加一些通用边距 */
 
 
 .image-container {
-    position: relative;
+    position: relative; /* Needed for absolute positioning of overlay */
     width: 100%;
-    max-width: 700px; /* 控制线稿显示的最大宽度 */
+    max-width: 700px;
     margin: 0 auto 30px auto;
-    border: none; /* 移除旧边框 */
-    background-color: #fff; /* 确保图片背景是白色 */
-    border-radius: 10px; /* 新增圆角 */
-    overflow: hidden; /* 确保子元素不会溢出圆角 */
+    background-color: #fff;
+    border-radius: 10px;
+    overflow: hidden;
     box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    min-height: 200px; /* 给容器一个最小高度，防止加载时塌陷 */
+    display: flex; /* 用于垂直居中加载指示器 */
+    justify-content: center; /* 水平居中 */
+    align-items: center; /* 垂直居中 */
 }
 
 #main-coloring-image {
     display: block;
     width: 100%;
+    transition: opacity 0.3s ease; /* 平滑过渡效果 */
 }
+
+/* 加载指示器样式 */
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7); /* 半透明黑色背景 */
+    display: flex; /* 使用 flex 布局 */
+    flex-direction: column; /* 垂直排列图标和文字 */
+    justify-content: center; /* 垂直居中 */
+    align-items: center; /* 水平居中 */
+    color: var(--primary-glow-color);
+    font-size: 1.5em;
+    z-index: 20; /* 确保在图片之上 */
+    border-radius: 10px; /* 保持圆角一致 */
+    text-align: center;
+}
+
+.loading-overlay i { /* Font Awesome spinner icon */
+    font-size: 2em; /* 图标大小 */
+    margin-bottom: 15px; /* 图标和文字间距 */
+    text-shadow: var(--glow-text-shadow);
+}
+.loading-overlay p {
+    margin: 0;
+    font-size: 0.8em;
+    color: var(--text-color-light);
+}
+
 
 #color-reference-image {
     position: absolute;
     bottom: 15px;
     right: 15px;
-    width: 20%; /* 参考图宽度 */
-    max-width: 120px; /* 参考图最大宽度 */
+    width: 20%;
+    max-width: 120px;
     border: 2px solid var(--primary-glow-color);
     box-shadow: 0 0 8px rgba(var(--primary-glow-color),0.5);
     background-color: #fff;
     z-index: 10;
-    border-radius: 8px; /* 圆角 */
+    border-radius: 8px;
 }
 
-.info-box { /* 用于 .description 和 .printing-tip */
-    background-color: rgba(10, 0, 20, 0.6); /* 深一点的半透明背景 */
+.info-box {
+    background-color: rgba(10, 0, 20, 0.6);
     padding: 20px;
     border-radius: 10px;
     margin-bottom: 25px;
@@ -278,24 +305,96 @@ section { /* 为所有内容section添加一些通用边距 */
 }
 .info-box strong {
     color: var(--primary-glow-color);
+    display: block; /* 让标题独占一行 */
+    margin-bottom: 10px; /* 标题和输入框间距 */
 }
 
+/* 新增：图片描述和生成控制区域特定样式 */
+.generation-controls {
+    text-align: center; /* 让内部元素居中 */
+}
+
+/* 新增：输入框样式 */
+#prompt-input {
+    display: block; /* 独占一行 */
+    width: calc(100% - 40px); /* 占据大部分宽度，留出内边距 */
+    padding: 12px 20px;
+    margin: 0 auto 15px auto; /* 上下边距，左右自动居中 */
+    font-size: 1em;
+    color: var(--text-color-light);
+    background-color: rgba(0, 0, 0, 0.3); /* 半透明背景 */
+    border: 1px solid var(--secondary-glow-color);
+    border-radius: 25px; /* 圆角 */
+    box-shadow: inset 0 0 8px rgba(var(--secondary-glow-color), 0.4);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    outline: none; /* 移除默认轮廓 */
+}
+#prompt-input::placeholder {
+    color: var(--text-color-medium);
+    opacity: 0.7;
+}
+#prompt-input:focus {
+    border-color: var(--primary-glow-color);
+    box-shadow: inset 0 0 10px rgba(var(--primary-glow-color), 0.5), 0 0 5px var(--primary-glow-color);
+}
+
+/* 新增：生成按钮样式 */
+#generate-button {
+    display: inline-block; /* 行内块元素 */
+    background-image: linear-gradient(to right, var(--secondary-glow-color), var(--primary-glow-color));
+    color: #fff;
+    padding: 12px 30px;
+    font-size: 1.1em;
+    font-weight: bold;
+    border-radius: 30px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 8px var(--primary-glow-color), 0 0 15px var(--primary-glow-color) inset;
+    text-shadow: 0 0 5px rgba(0,0,0,0.5);
+}
+#generate-button:hover:not(:disabled),
+#generate-button:focus:not(:disabled) {
+    background-image: linear-gradient(to right, var(--primary-glow-color), var(--secondary-glow-color));
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 0 12px var(--primary-glow-color), 0 0 25px var(--primary-glow-color) inset, 0 4px 8px rgba(0,0,0,0.3);
+    outline: none;
+}
+#generate-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    background-image: linear-gradient(to right, #555, #777); /* 禁用时的灰色渐变 */
+    box-shadow: none;
+}
+#generate-button i { /* 按钮图标样式 */
+    margin-right: 8px;
+}
+
+/* 新增：错误信息样式 */
+.error-text {
+    color: var(--error-color);
+    font-size: 0.9em;
+    margin-top: 10px; /* 与按钮的间距 */
+    text-align: center;
+    display: block; /* 确保独占一行 */
+}
+
+
 .download-button {
-    display: inline-block;
+    display: block; /* 改为块级，方便居中 */
     background-image: linear-gradient(to right, var(--secondary-glow-color), var(--primary-glow-color));
     color: #fff;
     padding: 15px 35px;
     text-decoration: none;
     font-size: 1.2em;
     font-weight: bold;
-    border-radius: 30px; /* 更圆的按钮 */
+    border-radius: 30px;
     transition: all 0.3s ease;
     border: none;
     box-shadow: 0 0 10px var(--primary-glow-color), 0 0 20px var(--primary-glow-color) inset;
     text-shadow: 0 0 5px rgba(0,0,0,0.5);
-    margin: 0 auto 25px auto; /* 居中按钮 */
-    display: block; /* 使其可居中 */
-    width: fit-content; /* 使其宽度适应内容 */
+    margin: 30px auto 25px auto; /* 调整与其他元素的间距 */
+    width: fit-content;
 }
 
 .download-button:hover,
@@ -307,7 +406,6 @@ section { /* 为所有内容section添加一些通用边距 */
 }
 
 .printing-tip {
-    /* .info-box 样式已应用，这里可以覆盖或添加特定样式 */
     border-left: 5px solid var(--secondary-glow-color);
 }
 
@@ -353,11 +451,11 @@ section { /* 为所有内容section添加一些通用边距 */
     padding: 30px 0;
     background-color: var(--bg-dark-purple);
     color: var(--text-color-medium);
-    margin-top: auto; /* 将页脚推到底部 */
+    margin-top: auto;
     border-top: 1px solid rgba(var(--primary-glow-color), 0.2);
-    position: relative; /* 为了可能的背景粒子效果 */
+    position: relative;
 }
-/* 简单的底部闪烁点示例 - 可以用JS更复杂地实现 */
+
 .site-footer::before, .site-footer::after {
     content: '';
     position: absolute;
@@ -404,9 +502,13 @@ section { /* 为所有内容section添加一些通用边距 */
         bottom: 10px;
         right: 10px;
     }
-    .download-button {
+    .download-button, #generate-button { /* Apply responsive styles to both buttons */
         font-size: 1.1em;
         padding: 12px 25px;
+    }
+    #prompt-input {
+        padding: 10px 15px;
+        font-size: 0.95em;
     }
     .swatch { width: 40px; height: 40px; }
 }
@@ -428,7 +530,17 @@ section { /* 为所有内容section添加一些通用边距 */
         padding: 15px;
     }
 
-    #color-reference-image { display: none; /* 在非常小的屏幕上可以考虑隐藏 */ }
-    .download-button { font-size: 1em; padding: 10px 20px; width: 80%; }
+    #color-reference-image { display: none; }
+    .download-button, #generate-button {
+        font-size: 1em;
+        padding: 10px 20px;
+        width: 80%; /* Make buttons wider on small screens */
+        margin-left: auto;
+        margin-right: auto;
+    }
+     #prompt-input {
+        width: calc(100% - 30px); /* Adjust width for padding */
+        padding: 10px 15px;
+    }
     .swatch { width: 35px; height: 35px; }
 }
