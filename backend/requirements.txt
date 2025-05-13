@@ -1,6 +1,8 @@
 Flask>=2.0
 requests>=2.25
 Flask-CORS>=3.0
+python-dotenv>=0.15
+gunicorn>=20.0
 # 如果你的生产环境使用 Gunicorn 或 Waitress，也需要添加到这里
 # gunicorn
 # waitress
