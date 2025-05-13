@@ -11,7 +11,7 @@ load_dotenv() # 在访问环境变量之前加载 .env 文件
 
 # --- 配置 ---
 # 现在 os.getenv 会优先读取 .env 文件中设置的值
-API_ENDPOINT = os.getenv("IMAGE_API_ENDPOINT", "https://api.gptgod.online/v1/chat/completions")
+API_ENDPOINT = os.getenv("IMAGE_API_ENDPOINT","https://api.gptgod.online/v1/chat/completions")
 API_KEY = os.getenv("IMAGE_API_KEY") # 如果 .env 中没有设置，这里会是 None
 
 # --- Flask 应用设置 ---
