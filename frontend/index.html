@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kiddie Color Creations - 发现魔法森林的色彩</title>
+    <title>Kiddie Color Creations - 儿童涂色创作平台</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="config.js"></script>
 </head>
 <body>
     <header class="site-header">
@@ -14,23 +15,159 @@
                 Kiddie Color Creations <span class="logo-subtitle">儿童涂色乐园</span>
             </div>
             <nav class="main-nav">
-                <ul>
-                    <li><a href="#">首页</a></li>
-                    <li><a href="#">画作集</a></li>
-                    <li><a href="#">关于我们</a></li>
-                </ul>
-                <button class="theme-toggle" aria-label="切换主题">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-                </button>
+                <div class="nav-links">
+                    <a href="#" class="nav-link">首页</a>
+                    <a href="admin.html" class="nav-link">管理员</a>
+                </div>
+                
+                <!-- 未登录状态 -->
+                <div id="auth-buttons" class="auth-section">
+                    <button id="login-btn" class="btn btn-outline">登录</button>
+                    <button id="register-btn" class="btn btn-primary">注册</button>
+                </div>
+                
+                <!-- 已登录状态 -->
+                <div id="user-section" class="user-section" style="display: none;">
+                    <div class="user-info">
+                        <span id="user-display" class="user-name">用户名</span>
+                        <span id="credits-display" class="credits">0 积分</span>
+                        <button id="user-menu-btn" class="user-menu-btn">
+                            <i class="fas fa-user"></i>
+                        </button>
+                        <div id="user-dropdown" class="user-dropdown">
+                            <a href="#" id="redeem-code-btn"><i class="fas fa-gift"></i> 兑换积分</a>
+                            <a href="#" id="transaction-history-btn"><i class="fas fa-history"></i> 使用记录</a>
+                            <a href="#" id="change-password-btn"><i class="fas fa-key"></i> 修改密码</a>
+                            <a href="#" id="logout-btn"><i class="fas fa-sign-out-alt"></i> 退出登录</a>
+                        </div>
+                    </div>
+                </div>
             </nav>
         </div>
     </header>
 
+    <!-- 登录模态框 -->
+    <div id="login-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>用户登录</h2>
+                <span class="close" id="close-login-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="login-username">用户名或邮箱</label>
+                        <input type="text" id="login-username" name="login" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">密码</label>
+                        <input type="password" id="login-password" name="password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">登录</button>
+                </form>
+                <div id="login-message" class="message" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 注册模态框 -->
+    <div id="register-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>用户注册</h2>
+                <span class="close" id="close-register-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="register-form">
+                    <div class="form-group">
+                        <label for="register-username">用户名</label>
+                        <input type="text" id="register-username" name="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-email">邮箱</label>
+                        <input type="email" id="register-email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-password">密码</label>
+                        <input type="password" id="register-password" name="password" required minlength="6">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">注册</button>
+                </form>
+                <div id="register-message" class="message" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 兑换积分模态框 -->
+    <div id="redeem-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>兑换积分</h2>
+                <span class="close" id="close-redeem-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="redeem-form">
+                    <div class="form-group">
+                        <label for="redeem-code-input">兑换码</label>
+                        <input type="text" id="redeem-code-input" name="code" required
+                               placeholder="请输入16位兑换码" maxlength="16" style="text-transform: uppercase;">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">兑换</button>
+                </form>
+                <div id="redeem-message" class="message" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 交易记录模态框 -->
+    <div id="history-modal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>积分使用记录</h2>
+                <span class="close" id="close-history-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="transaction-list" class="transaction-list">
+                    <div class="loading">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 修改密码模态框 -->
+    <div id="change-password-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>修改密码</h2>
+                <span class="close" id="close-change-password-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="change-password-form">
+                    <div class="form-group">
+                        <label for="current-password">当前密码</label>
+                        <input type="password" id="current-password" name="current_password" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="new-password">新密码</label>
+                        <input type="password" id="new-password" name="new_password" required
+                               minlength="6" title="密码长度至少6位">
+                    </div>
+                    <div class="form-group">
+                        <label for="confirm-new-password">确认新密码</label>
+                        <input type="password" id="confirm-new-password" name="confirm_password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">修改密码</button>
+                </form>
+                <div id="change-password-message" class="message" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+
     <main>
         <section class="hero-section">
             <div class="container">
-                <h1>发现魔法森林的色彩</h1>
-                <p>踏上一场奇妙的探索之旅，用你的想象力为神秘的独角兽世界添加绚丽色彩。让创意在指尖绽放！</p>
+                <h1>儿童涂色创作平台</h1>
+                <p>AI智能生成专属涂色图片，激发孩子的创造力和想象力！</p>
                 <a href="#coloring-section" class="scroll-down-arrow" aria-label="滚动到涂色区域">
                     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                 </a>
@@ -39,175 +176,510 @@
 
         <section class="coloring-page" id="coloring-section">
             <div class="container">
-                <h2>发挥你的想象力！</h2>
-                <p class="section-subtitle">输入你想要画的场景，让魔法为你生成专属涂色线条画</p>
+                <h2>AI智能生成涂色图片</h2>
+                <p class="section-subtitle">输入您想要的场景描述，AI将为您生成专属的涂色线条画</p>
 
-                <div class="image-container">
-                    <img src="https://storage.googleapis.com/gemini-common-pro-usercontent/img/62e0a5f9b35d5d40_570.png" alt="涂色线条画" id="main-coloring-image">
-                     <div class="loading-overlay" id="loading-indicator" style="display: none;">
-                        <i class="fas fa-spinner fa-spin"></i>
-                        <p>正在生成线条画...</p>
+                <!-- 未登录提示 -->
+                <div id="login-prompt" class="login-prompt">
+                    <div class="prompt-content">
+                        <i class="fas fa-user-lock"></i>
+                        <h3>请先登录</h3>
+                        <p>登录后即可使用AI生成功能，创作属于您的专属涂色图片</p>
+                        <button id="prompt-login-btn" class="btn btn-primary">立即登录</button>
                     </div>
-                    <img src="https://storage.googleapis.com/gemini-common-pro-usercontent/img/b31e3156f81e600b_120.png" alt="彩色参考图" id="color-reference-image">
                 </div>
 
-                <div class="info-box description generation-controls">
-                    <p><strong>图片描述：</strong></p>
-                    <input type="text" id="prompt-input" placeholder="例如：一只戴着帽子的可爱小猫">
-                    <button id="generate-button">
-                        <i class="fas fa-magic"></i> 生成线条画
-                    </button>
-                    <p id="error-message" class="error-text" style="display: none;"></p> </div>
+                <!-- 已登录内容 -->
+                <div id="generation-content" style="display: none;">
+                    <!-- 积分消费提示 -->
+                    <div id="credits-info" class="credits-info">
+                        <i class="fas fa-coins"></i>
+                        <span>生成1张图片+1套配色方案需要 2 积分</span>
+                    </div>
 
-                <a href="https://storage.googleapis.com/gemini-common-pro-usercontent/img/62e0a5f9b35d5d40_570.png" download="Coloring_Page.png" class="download-button" id="download-link">
-                    下载A4打印稿
-                </a>
+                    <div class="generation-controls">
+                        <div class="form-group">
+                            <label for="prompt-input">图片描述</label>
+                            <input type="text" id="prompt-input" placeholder="例如：一只可爱的小猫在花园里玩耍" maxlength="200">
+                            <small class="form-hint">描述越详细，生成的图片越符合您的期望</small>
+                        </div>
+                        <button id="generate-button" class="btn btn-primary btn-large">
+                            <i class="fas fa-magic"></i>
+                            生成涂色图片
+                        </button>
+                    </div>
 
-                <div class="info-box printing-tip">
-                    <p><strong>打印提示：</strong> 为获得最佳效果，请在打印机设置中选择“无边距打印”或“满幅面打印”！</p>
+                    <div id="error-message" class="message error" style="display: none;"></div>
+                    <div id="success-message" class="message success" style="display: none;"></div>
+
+                    <div class="image-container">
+                        <div class="image-placeholder" id="image-placeholder">
+                            <i class="fas fa-image"></i>
+                            <p>您生成的涂色图片将显示在这里</p>
+                        </div>
+                        <img id="generated-image" alt="生成的涂色图片" style="display: none;">
+                        <div class="loading-overlay" id="loading-indicator" style="display: none;">
+                            <div class="loading-spinner">
+                                <i class="fas fa-spinner fa-spin"></i>
+                            </div>
+                            <p>AI正在为您生成专属涂色图片...</p>
+                            <small>这可能需要30-60秒，请耐心等待</small>
+                        </div>
+                    </div>
+
+                    <div id="image-actions" class="image-actions" style="display: none;">
+                        <button id="download-btn" class="btn btn-outline">
+                            <i class="fas fa-download"></i>
+                            下载图片
+                        </button>
+                        <button id="regenerate-btn" class="btn btn-outline">
+                            <i class="fas fa-redo"></i>
+                            重新生成
+                        </button>
+                    </div>
+
+                    <!-- 智能配色区域 -->
+                    <div id="color-palette-section" class="color-palette-section" style="display: none;">
+                        <h3>AI智能配色方案</h3>
+                        <p class="section-subtitle">基于图片内容智能推荐的配色方案</p>
+                        
+                        <div class="palette-loading" id="palette-loading-indicator" style="display: none;">
+                            <i class="fas fa-palette fa-spin"></i>
+                            <span>正在生成智能配色...</span>
+                        </div>
+                        
+                        <div id="color-swatches-container" class="color-swatches">
+                            <!-- 智能配色将在这里显示 -->
+                        </div>
+                        
+                        <div class="palette-tip">
+                            <i class="fas fa-lightbulb"></i>
+                            <span>点击颜色可复制色值，为您的涂色创作提供灵感</span>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </section>
-
-        <section class="color-palette-section">
-            <div class="container">
-                <h2>推荐配色方案</h2>
-                <p class="section-subtitle">点击下方颜色块，获取灵感</p>
-                <div class="color-swatches">
-                    <span class="swatch" style="background-color: #FFC0CB;" title="粉色"></span> <span class="swatch" style="background-color: #DA70D6;" title="紫色"></span> <span class="swatch" style="background-color: #87CEEB;" title="蓝色"></span> <span class="swatch" style="background-color: #AFEEEE;" title="青色"></span> <span class="swatch" style="background-color: #90EE90;" title="绿色"></span> <span class="swatch" style="background-color: #FFFFE0;" title="黄色"></span> <span class="swatch" style="background-color: #FFA07A;" title="橙色"></span> <span class="swatch" style="background-color: #F08080;" title="红色"></span> </div>
-                <p class="palette-tip">
-                    <strong>贴心提示：</strong>发挥你的创意，为生成的线条画涂上独一无二的色彩吧！
-                </p>
             </div>
         </section>
     </main>
 
     <footer class="site-footer">
         <div class="container">
-            <p>&copy; <span id="current-year">2023</span> Kiddie Color Creations. 版权所有。</p>
+            <p>&copy; <span id="current-year">2025</span> Kiddie Color Creations. 版权所有。</p>
         </div>
     </footer>
 
+    <script src="auth.js"></script>
     <script>
         // 设置当前年份
         document.getElementById('current-year').textContent = new Date().getFullYear();
 
-        // 获取需要的 DOM 元素
-        const promptInput = document.getElementById('prompt-input');
-        const generateButton = document.getElementById('generate-button');
-        const mainImage = document.getElementById('main-coloring-image');
-        const loadingIndicator = document.getElementById('loading-indicator');
-        const downloadLink = document.getElementById('download-link');
-        const errorMessage = document.getElementById('error-message');
+        // 全局变量
+        let currentPrompt = '';
 
-        // 为生成按钮添加点击事件监听器
-        generateButton.addEventListener('click', async () => { // 使用 async 方便使用 await
-            const prompt = promptInput.value.trim();
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('页面加载完成，初始化认证系统');
+            
+            // 检查登录状态
+            authSystem.updateUI();
+            
+            // 绑定事件监听器
+            bindEventListeners();
+        });
 
-            // 验证输入
+        function bindEventListeners() {
+            // 登录/注册按钮
+            document.getElementById('login-btn').addEventListener('click', () => {
+                authSystem.openModal('login-modal');
+            });
+            
+            document.getElementById('register-btn').addEventListener('click', () => {
+                authSystem.openModal('register-modal');
+            });
+            
+            document.getElementById('prompt-login-btn').addEventListener('click', () => {
+                authSystem.openModal('login-modal');
+            });
+
+            // 用户菜单
+            document.getElementById('user-menu-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                const dropdown = document.getElementById('user-dropdown');
+                dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+            });
+
+            // 点击其他地方关闭下拉菜单
+            document.addEventListener('click', () => {
+                authSystem.closeUserDropdown();
+            });
+
+            // 模态框关闭按钮
+            document.getElementById('close-login-modal').addEventListener('click', () => {
+                authSystem.closeModal('login-modal');
+            });
+            
+            document.getElementById('close-register-modal').addEventListener('click', () => {
+                authSystem.closeModal('register-modal');
+            });
+            
+            document.getElementById('close-redeem-modal').addEventListener('click', () => {
+                authSystem.closeModal('redeem-modal');
+            });
+            
+            document.getElementById('close-history-modal').addEventListener('click', () => {
+                authSystem.closeModal('history-modal');
+            });
+
+            document.getElementById('close-change-password-modal').addEventListener('click', () => {
+                authSystem.closeModal('change-password-modal');
+            });
+
+            // 用户下拉菜单项
+            document.getElementById('redeem-code-btn').addEventListener('click', (e) => {
+                e.preventDefault();
+                authSystem.closeUserDropdown();
+                authSystem.openModal('redeem-modal');
+            });
+
+            document.getElementById('transaction-history-btn').addEventListener('click', (e) => {
+                e.preventDefault();
+                authSystem.closeUserDropdown();
+                authSystem.openModal('history-modal');
+                authSystem.loadTransactionHistory();
+            });
+
+            document.getElementById('change-password-btn').addEventListener('click', (e) => {
+                e.preventDefault();
+                authSystem.closeUserDropdown();
+                authSystem.openModal('change-password-modal');
+            });
+
+            document.getElementById('logout-btn').addEventListener('click', (e) => {
+                e.preventDefault();
+                authSystem.logout();
+            });
+
+            // 表单提交
+            document.getElementById('login-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                await authSystem.login(formData.get('login'), formData.get('password'));
+            });
+
+            document.getElementById('register-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                await authSystem.register(
+                    formData.get('username'),
+                    formData.get('email'),
+                    formData.get('password')
+                );
+            });
+
+            // 兑换码表单提交
+            document.getElementById('redeem-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const code = formData.get('code').trim().toUpperCase();
+
+                if (code.length !== 16) {
+                    showMessage('redeem-message', '兑换码必须是16位', 'error');
+                    return;
+                }
+
+                await authSystem.redeemCode(code);
+            });
+
+            // 修改密码表单提交
+            document.getElementById('change-password-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const currentPassword = formData.get('current_password');
+                const newPassword = formData.get('new_password');
+                const confirmPassword = formData.get('confirm_password');
+
+                if (newPassword !== confirmPassword) {
+                    showMessage('change-password-message', '两次输入的新密码不一致', 'error');
+                    return;
+                }
+
+                await authSystem.changePassword(currentPassword, newPassword, confirmPassword);
+            });
+
+            // 生成按钮
+            document.getElementById('generate-button').addEventListener('click', generateImageWithAuth);
+            
+            // 重新生成按钮
+            document.getElementById('regenerate-btn').addEventListener('click', generateImageWithAuth);
+            
+            // 下载按钮
+            document.getElementById('download-btn').addEventListener('click', downloadImage);
+        }
+
+        // 带认证的图片生成函数
+        async function generateImageWithAuth() {
+            const prompt = document.getElementById('prompt-input').value.trim();
+
             if (!prompt) {
-                errorMessage.textContent = '请输入图片描述！';
-                errorMessage.style.display = 'block';
-                promptInput.focus();
+                showMessage('error-message', '请输入图片描述！', 'error');
+                document.getElementById('prompt-input').focus();
                 return;
-            } else {
-                errorMessage.style.display = 'none';
             }
 
-            // --- 开始调用后端 API ---
-            console.log('准备发送给后端的提示词:', prompt);
+            // 检查登录状态
+            if (!authSystem.getCurrentUser() || !authSystem.getAuthToken()) {
+                showMessage('error-message', '请先登录后再使用生成功能', 'error');
+                authSystem.openModal('login-modal');
+                return;
+            }
 
-            // 1. 显示加载状态
+            // 检查积分余额（需要2积分：1积分生成图片 + 1积分生成配色）
+            const currentUser = authSystem.getCurrentUser();
+            if (!currentUser || currentUser.credits < 2) {
+                showMessage('error-message', '积分余额不足，需要2积分（图片+配色），请先兑换积分', 'error');
+                return;
+            }
+
+            const loadingIndicator = document.getElementById('loading-indicator');
+            const placeholderContent = document.getElementById('image-placeholder');
+            const mainImage = document.getElementById('generated-image');
+            const generateButton = document.getElementById('generate-button');
+            const errorMessage = document.getElementById('error-message');
+
             loadingIndicator.style.display = 'flex';
+            placeholderContent.style.display = 'none';
             mainImage.style.opacity = '0.5';
             generateButton.disabled = true;
             generateButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 生成中...';
-            errorMessage.style.display = 'none'; // 清除旧错误
+            hideMessage('error-message');
 
             try {
-                // 2. 发送请求到你的后端服务器
-                //    将 URL 修改为后端服务器的实际地址和端口
-                const backendUrl = 'https://kiddie-color-creations-backend.onrender.com/api/generate-image'; // <--- 修改这里！
-                // 或者，如果前后端在同一台机器上测试，也可以用:
-                // const backendUrl = 'http://localhost:5000/api/generate-image';
-                console.log(`正在向后端发送请求: ${backendUrl}`); // 打印将要请求的 URL
+                console.log('开始生成图片，prompt:', prompt);
+                console.log('使用token:', authSystem.getAuthToken());
 
-                const response = await fetch(backendUrl, { // 使用变量 backendUrl
+                const response = await fetch(CONFIG.API_BASE_URL + '/generate-image', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authSystem.getAuthToken()}`
                     },
-                    body: JSON.stringify({ prompt: prompt }) // 将提示词作为 JSON 发送
+                    body: JSON.stringify({ prompt: prompt })
                 });
 
-                // 3. 检查后端响应是否成功
+                console.log('生成图片响应状态:', response.status);
+                console.log('生成图片响应头:', response.headers);
+
                 if (!response.ok) {
-                    // 如果后端返回错误状态码 (例如 4xx, 5xx)
-                    const errorData = await response.json().catch(() => ({ message: '无法解析错误信息' })); // 尝试解析错误信息
-                    throw new Error(errorData.message || `服务器错误: ${response.status}`);
+                    const errorData = await response.json().catch(() => ({ error: '无法解析错误信息' }));
+                    console.error('生成图片失败，错误数据:', errorData);
+                    throw new Error(errorData.error || `服务器错误: ${response.status}`);
                 }
 
-                // 4. 解析后端返回的 JSON 数据
                 const data = await response.json();
+                console.log('生成图片成功，响应数据:', data);
 
-                // 5. 检查后端返回的数据中是否包含图片 URL
                 if (data && data.imageUrl) {
-                    console.log('从后端获取到的图片 URL:', data.imageUrl);
-
-                    // 6. 更新图片和下载链接
                     mainImage.src = data.imageUrl;
                     mainImage.alt = `线条画: ${prompt}`;
-                    downloadLink.href = data.imageUrl; // 使用后端返回的真实 URL
-                    // 为下载链接生成一个基于提示词的文件名 (可选)
-                    const filename = `ColoringPage_${prompt.replace(/[^a-z0-9]/gi, '_').substring(0, 20)}.png`;
-                    downloadLink.download = filename;
+                    mainImage.style.display = 'block';
+                    placeholderContent.style.display = 'none';
 
+                    const downloadBtn = document.getElementById('download-btn');
+                    downloadBtn.setAttribute('data-url', data.imageUrl);
+                    downloadBtn.setAttribute('data-filename', `ColoringPage_${prompt.replace(/[^a-z0-9]/gi, '_').substring(0, 20)}.png`);
+
+                    document.getElementById('image-actions').style.display = 'block';
+
+                    // 生成配色方案
+                    await updateColorPalette(prompt);
+
+                    // 在所有服务完成后更新用户积分（确保显示正确的总扣减）
+                    await authSystem.refreshUserInfo();
+
+                    currentPrompt = prompt;
                 } else {
-                    // 如果后端返回的数据格式不正确
                     throw new Error('后端未返回有效的图片 URL');
                 }
 
             } catch (error) {
-                // 7. 处理 fetch 调用或后端逻辑中发生的错误
                 console.error('调用后端 API 时出错:', error);
-                // 检查是否是网络错误 (例如后端未启动或地址错误)
-                if (error instanceof TypeError && error.message === 'Failed to fetch') {
-                     errorMessage.textContent = '无法连接到后端服务，请确保后端正在运行且地址正确。';
-                } else {
-                    errorMessage.textContent = `生成失败: ${error.message}`;
-                }
-                errorMessage.style.display = 'block';
-                // 可以考虑将图片恢复成默认状态或显示错误占位图
-                // mainImage.src = 'images/error_placeholder.png';
-                // downloadLink.href = '#';
-                // downloadLink.removeAttribute('download');
 
+                // 特殊处理401错误（认证失败）
+                if (error.message.includes('401') || error.message.includes('无效的登录令牌')) {
+                    console.log('认证失败，尝试重新获取用户信息...');
+                    // 尝试刷新用户信息，如果失败则要求重新登录
+                    try {
+                        await authSystem.refreshUserInfo();
+                        // 如果刷新成功，提示用户重试
+                        showMessage('error-message', '登录状态已更新，请重试生成', 'warning');
+                    } catch (refreshError) {
+                        // 如果刷新失败，要求重新登录
+                        showMessage('error-message', '登录已过期，请重新登录', 'error');
+                        authSystem.openModal('login-modal');
+                    }
+                } else if (error instanceof TypeError && error.message === 'Failed to fetch') {
+                    showMessage('error-message', '无法连接到后端服务，请确保后端正在运行且地址正确。', 'error');
+                } else {
+                    showMessage('error-message', `生成失败: ${error.message}`, 'error');
+                }
+                placeholderContent.style.display = 'flex';
+                mainImage.style.display = 'none';
             } finally {
-                // 8. 无论成功或失败，最后都隐藏加载状态，恢复按钮
                 loadingIndicator.style.display = 'none';
                 mainImage.style.opacity = '1';
                 generateButton.disabled = false;
-                generateButton.innerHTML = '<i class="fas fa-magic"></i> 生成线条画';
+                generateButton.innerHTML = '<i class="fas fa-magic"></i> 生成涂色图片';
             }
-            // --- 后端 API 调用结束 ---
-        });
+        }
 
-        // 可选：当图片加载完成后，确保移除半透明效果
-        mainImage.onload = () => {
-             mainImage.style.opacity = '1';
-        };
-        // 可选：处理图片加载错误 (例如 URL 无效)
-        mainImage.onerror = () => {
-            // 避免在 fetch 失败时重复显示错误
-            if (loadingIndicator.style.display === 'none') {
-                errorMessage.textContent = '图片加载失败，请检查图片链接是否有效。';
-                errorMessage.style.display = 'block';
-                mainImage.style.opacity = '1';
+        // 更新配色方案的函数
+        async function updateColorPalette(prompt) {
+            const colorSwatchesContainer = document.getElementById('color-swatches-container');
+            const paletteLoadingIndicator = document.getElementById('palette-loading-indicator');
+            const paletteSection = document.getElementById('color-palette-section');
+
+            colorSwatchesContainer.innerHTML = ''; // 清空现有颜色块
+            paletteLoadingIndicator.style.display = 'block'; // 显示加载指示器
+            paletteSection.style.display = 'block'; // 显示配色区域
+
+            try {
+                // 调用后端配色API
+                const backendUrl = CONFIG.API_BASE_URL + '/generate-colors';
+                console.log(`正在向后端发送配色请求: ${backendUrl}`);
+                console.log('配色请求使用token:', authSystem.getAuthToken() ? authSystem.getAuthToken().substring(0, 20) + '...' : 'null');
+
+                const response = await fetch(backendUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authSystem.getAuthToken()}`
+                    },
+                    body: JSON.stringify({ prompt: prompt })
+                });
+
+                console.log('配色API响应状态:', response.status);
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: '无法解析错误信息' }));
+                    console.error('配色生成失败，错误数据:', errorData);
+                    throw new Error(errorData.error || `配色服务器错误: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('从后端获取到的配色数据:', data);
+
+                if (data && data.colors && Array.isArray(data.colors)) {
+                    data.colors.forEach(color => {
+                        if (typeof color === 'string' && /^#[0-9A-F]{6}$/i.test(color)) {
+                            const swatch = document.createElement('span');
+                            swatch.className = 'swatch';
+                            swatch.style.backgroundColor = color;
+                            swatch.title = `点击复制: ${color}`;
+                            swatch.setAttribute('data-color', color);
+                            swatch.addEventListener('click', () => copyColorToClipboard(color, swatch));
+                            colorSwatchesContainer.appendChild(swatch);
+                        } else {
+                            console.warn(`收到的无效颜色代码: ${color}`);
+                        }
+                    });
+
+                    console.log('配色生成成功，准备刷新用户积分');
+                } else {
+                    console.error('后端未返回有效的颜色数组');
+                    displayDefaultColors('未能获取有效配色数组');
+                }
+
+            } catch (error) {
+                console.error('调用配色API时发生错误:', error);
+                if (error instanceof TypeError && error.message === 'Failed to fetch') {
+                    displayDefaultColors('无法连接到配色服务，使用默认配色');
+                } else {
+                    displayDefaultColors(`配色生成失败: ${error.message}`);
+                }
+
+                // 即使配色失败，也要刷新积分（因为图片生成可能成功了）
+                console.log('配色生成失败，但仍需刷新用户积分');
+                try {
+                    await authSystem.refreshUserInfo();
+                } catch (refreshError) {
+                    console.error('刷新用户积分失败:', refreshError);
+                }
+            } finally {
+                paletteLoadingIndicator.style.display = 'none';
             }
-             // 可以设置一个默认的错误图片
-            // mainImage.src = 'images/error_placeholder.png';
-        };
+        }
 
+        // 显示默认颜色块（在API调用失败或初始加载时）
+        function displayDefaultColors(message) {
+            const colorSwatchesContainer = document.getElementById('color-swatches-container');
+            colorSwatchesContainer.innerHTML = '';
+            const defaultColors = ["#FFC0CB", "#DA70D6", "#87CEEB", "#AFEEEE", "#90EE90", "#FFFFE0", "#FFA07A", "#F08080"];
+            defaultColors.forEach(color => {
+                const swatch = document.createElement('span');
+                swatch.className = 'swatch';
+                swatch.style.backgroundColor = color;
+                swatch.title = color;
+                swatch.setAttribute('data-color', color);
+                swatch.addEventListener('click', () => copyColorToClipboard(color, swatch));
+                colorSwatchesContainer.appendChild(swatch);
+            });
+            console.log('显示默认配色:', message);
+        }
+
+        // 复制颜色到剪贴板
+        function copyColorToClipboard(color, element) {
+            navigator.clipboard.writeText(color).then(() => {
+                // 显示复制成功的视觉反馈
+                const originalTitle = element.title;
+                element.title = '已复制!';
+                element.style.transform = 'scale(1.1)';
+
+                setTimeout(() => {
+                    element.title = originalTitle;
+                    element.style.transform = 'scale(1)';
+                }, 1000);
+
+                console.log('颜色已复制到剪贴板:', color);
+            }).catch(err => {
+                console.error('复制失败:', err);
+                // 降级方案：显示颜色值
+                alert(`颜色代码: ${color}`);
+            });
+        }
+
+        // 下载图片
+        function downloadImage() {
+            const downloadBtn = document.getElementById('download-btn');
+            const imageUrl = downloadBtn.getAttribute('data-url');
+            const filename = downloadBtn.getAttribute('data-filename');
+
+            if (imageUrl) {
+                const link = document.createElement('a');
+                link.href = imageUrl;
+                link.download = filename || 'coloring-page.png';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+
+        // 显示消息的辅助函数
+        function showMessage(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.textContent = message;
+                element.className = `message ${type}`;
+                element.style.display = 'block';
+            }
+        }
+
+        // 隐藏消息的辅助函数
+        function hideMessage(elementId) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.style.display = 'none';
+            }
+        }
     </script>
 </body>
 </html>
