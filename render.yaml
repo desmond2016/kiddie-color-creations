@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: kiddie-color-creations-backend
+    env: python
+    buildCommand: "cd backend && pip install -r requirements.txt"
+    startCommand: "cd backend && gunicorn --bind 0.0.0.0:$PORT app:app"
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: ADMIN_KEY
+        value: admin123
+      - key: IMAGE_API_ENDPOINT
+        value: https://api.gptgod.online/v1/chat/completions
+      - key: IMAGE_API_KEY
+        sync: false  # 需要手动设置
+    healthCheckPath: /api/auth/health

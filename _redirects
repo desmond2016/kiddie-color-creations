@@ -1,0 +1,5 @@
+# Cloudflare Pages redirects
+# 将API请求代理到Render后端
+/api/* https://kiddie-color-creations-backend.onrender.com/api/:splat 200
+# 所有其他请求返回index.html（SPA路由）
+/* /index.html 200

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能配色测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #1a082e; color: #f0e6ff; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ff00ff; border-radius: 10px; }
+        button { margin: 5px; padding: 10px 15px; background: #ff00ff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #8A2BE2; }
+        .result { margin: 10px 0; padding: 10px; background: #2a004f; border-radius: 5px; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e8; color: #2e7d32; }
+        input { padding: 8px; margin: 5px; border: 1px solid #ff00ff; border-radius: 5px; background: #2a004f; color: #f0e6ff; width: 400px; }
+        .color-swatch { display: inline-block; width: 60px; height: 60px; margin: 5px; border: 2px solid #fff; border-radius: 8px; cursor: pointer; position: relative; }
+        .color-code { font-size: 10px; position: absolute; bottom: -20px; left: 0; right: 0; text-align: center; color: #fff; }
+        .test-prompts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+        .prompt-btn { background: #4CAF50; padding: 8px; border-radius: 5px; cursor: pointer; text-align: center; }
+        .prompt-btn:hover { background: #45a049; }
+    </style>
+</head>
+<body>
+    <h1>🎨 智能配色算法测试</h1>
+    
+    <div class="test-section">
+        <h3>1. 用户登录</h3>
+        <input type="text" id="username" placeholder="用户名" value="testuser" style="width: 150px;">
+        <input type="password" id="password" placeholder="密码" value="123456" style="width: 150px;">
+        <button onclick="login()">登录</button>
+        <div id="login-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>2. 智能配色测试</h3>
+        <p>输入描述，测试智能配色算法：</p>
+        <input type="text" id="prompt" placeholder="输入图片描述" value="一只红色的小猫在绿色的花园里玩耍">
+        <button onclick="testColors()">生成配色</button>
+        
+        <div class="test-prompts">
+            <div class="prompt-btn" onclick="setPrompt('一只红色的小猫在绿色的花园里玩耍')">红猫绿花园</div>
+            <div class="prompt-btn" onclick="setPrompt('蓝色的海边有一只白色的海鸥')">蓝海白鸥</div>
+            <div class="prompt-btn" onclick="setPrompt('夜晚的天空中有黄色的月亮和星星')">夜空月星</div>
+            <div class="prompt-btn" onclick="setPrompt('粉色的公主在紫色的城堡里')">粉色公主</div>
+            <div class="prompt-btn" onclick="setPrompt('开心的小女孩在公园里放风筝')">开心女孩</div>
+            <div class="prompt-btn" onclick="setPrompt('安静的小熊在森林里睡觉')">安静小熊</div>
+            <div class="prompt-btn" onclick="setPrompt('彩色的蝴蝶在花丛中飞舞')">彩色蝴蝶</div>
+            <div class="prompt-btn" onclick="setPrompt('橙色的汽车在马路上行驶')">橙色汽车</div>
+        </div>
+        
+        <div id="colors-result" class="result"></div>
+        <div id="colors-display" style="margin-top: 20px; text-align: center;"></div>
+    </div>
+    
+    <script>
+        const API_BASE_URL = 'http://127.0.0.1:5000/api';
+        let authToken = null;
+        
+        function showResult(elementId, message, isError = false) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = message;
+            element.className = `result ${isError ? 'error' : 'success'}`;
+        }
+        
+        function setPrompt(prompt) {
+            document.getElementById('prompt').value = prompt;
+        }
+        
+        async function login() {
+            try {
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                
+                const response = await fetch(`${API_BASE_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        login: username,
+                        password: password
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                authToken = data.access_token;
+                
+                showResult('login-result', `✅ 登录成功！积分: ${data.user.credits}`);
+                
+            } catch (error) {
+                showResult('login-result', `❌ 登录失败: ${error.message}`, true);
+            }
+        }
+        
+        async function testColors() {
+            if (!authToken) {
+                showResult('colors-result', '❌ 请先登录', true);
+                return;
+            }
+            
+            try {
+                const prompt = document.getElementById('prompt').value.trim();
+                if (!prompt) {
+                    showResult('colors-result', '❌ 请输入描述', true);
+                    return;
+                }
+                
+                console.log('测试配色，描述:', prompt);
+                
+                showResult('colors-result', '🎨 正在分析并生成配色...');
+                
+                const response = await fetch(`${API_BASE_URL}/generate-colors`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        prompt: prompt
+                    })
+                });
+                
+                console.log('配色响应状态:', response.status);
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: '无法解析错误信息' }));
+                    throw new Error(errorData.error || `HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('配色生成成功:', data);
+                
+                showResult('colors-result', '✅ 智能配色生成成功！');
+                
+                // 显示配色
+                if (data.colors && Array.isArray(data.colors)) {
+                    displayColors(data.colors, prompt);
+                } else {
+                    console.error('未收到有效的配色数据');
+                }
+                
+            } catch (error) {
+                console.error('配色生成失败:', error);
+                showResult('colors-result', `❌ 配色生成失败: ${error.message}`, true);
+            }
+        }
+        
+        function displayColors(colors, prompt) {
+            const colorsDisplay = document.getElementById('colors-display');
+            
+            let html = `
+                <h4>🎨 为 "${prompt}" 生成的智能配色：</h4>
+                <div style="margin: 20px 0;">
+            `;
+            
+            colors.forEach((color, index) => {
+                html += `
+                    <div class="color-swatch" style="background-color: ${color};" onclick="copyColor('${color}')">
+                        <div class="color-code">${color}</div>
+                    </div>
+                `;
+            });
+            
+            html += `
+                </div>
+                <p style="margin-top: 30px;">
+                    <strong>配色代码:</strong> ${colors.join(', ')}<br>
+                    <small>点击色块复制颜色代码</small>
+                </p>
+            `;
+            
+            colorsDisplay.innerHTML = html;
+        }
+        
+        function copyColor(color) {
+            navigator.clipboard.writeText(color).then(() => {
+                alert(`颜色代码 ${color} 已复制到剪贴板！`);
+            }).catch(() => {
+                alert(`颜色代码: ${color}`);
+            });
+        }
+        
+        // 页面加载时的初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('智能配色测试页面加载完成');
+        });
+    </script>
+</body>
+</html>
