@@ -2,7 +2,7 @@ services:
   - type: web
     name: kiddie-color-creations-backend
     env: python
-    buildCommand: "cd backend && pip install -r requirements.txt"
+    buildCommand: "pip install -r backend/requirements.txt"
     startCommand: "cd backend && gunicorn --bind 0.0.0.0:$PORT app:app"
     envVars:
       - key: SECRET_KEY
