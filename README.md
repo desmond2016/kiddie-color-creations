@@ -39,7 +39,8 @@
 - **index.html**: 主页面（用户功能）
 - **admin.html**: 管理员后台
 - **auth.js**: 认证和用户交互
-- **test_smart_colors.html**: 配色算法测试
+- **config.js**: 配置文件
+- **style.css**: 样式文件
 
 ### 数据库 (SQLite)
 - 用户表 (User)
@@ -72,16 +73,19 @@ kiddie-color-creations/
 │   ├── models.py           # 数据模型
 │   ├── database.py         # 数据库
 │   ├── requirements.txt    # Python依赖
-│   └── venv/               # 虚拟环境
+│   ├── venv/               # 虚拟环境
+│   └── instance/           # 实例文件
+│       └── kiddie_color_creations.db  # 数据库文件
 ├── frontend/               # 前端页面
 │   ├── index.html          # 主页面
 │   ├── admin.html          # 管理员后台
 │   ├── auth.js             # 认证脚本
-│   ├── style.css           # 样式文件
-│   └── test_smart_colors.html  # 配色测试
-├── start_simple.bat        # 启动脚本
+│   ├── config.js           # 配置文件
+│   └── style.css           # 样式文件
+├── start_simple.bat        # Windows启动脚本
 ├── start_frontend.py       # 前端服务器
-├── 启动说明.txt            # 详细说明
+├── render.yaml             # Render部署配置
+├── _redirects              # Cloudflare重定向配置
 └── README.md               # 项目说明
 ```
 

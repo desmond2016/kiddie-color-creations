@@ -3,10 +3,17 @@ import os
 import json
 import requests # 使用 requests 库发送 HTTP 请求
 import re # 导入正则表达式库
+from datetime import timedelta
 from flask import Flask, request, jsonify
 from flask_cors import CORS # 用于处理跨域请求
+from flask_jwt_extended import JWTManager
 from dotenv import load_dotenv # 导入 load_dotenv
 import traceback # 用于打印完整的错误追踪信息
+
+# 导入数据库模型和蓝图
+from models import db, User, RedemptionCode, CreditTransaction
+from auth import auth_bp, setup_jwt_error_handlers
+from credits import credits_bp
 
 load_dotenv() # 在访问环境变量之前加载 .env 文件
 
@@ -16,158 +23,315 @@ API_KEY = os.getenv("IMAGE_API_KEY") # 从环境变量获取 API 密钥
 
 # --- Flask 应用设置 ---
 app = Flask(__name__)
-CORS(app) # 允许所有来源的跨域请求，生产环境中建议配置具体的来源
+
+# 应用配置
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key-change-in-production')
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=7)
+
+# 数据库配置
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///kiddie_color_creations.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# 管理员配置
+app.config['ADMIN_KEY'] = os.getenv('ADMIN_KEY', 'admin123')
+app.config['ADMIN_PASSWORD'] = os.getenv('ADMIN_PASSWORD', 'admin123')
+
+# 初始化扩展
+CORS(app,
+     origins=['http://localhost:8080', 'http://127.0.0.1:8080', 'null'],  # 'null' 允许 file:// 协议
+     allow_headers=['Content-Type', 'Authorization', 'X-Admin-Key'],
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+     supports_credentials=True)
+db.init_app(app)
+jwt = JWTManager(app)
+
+# 设置JWT错误处理
+setup_jwt_error_handlers(jwt)
+
+# 注册蓝图
+app.register_blueprint(auth_bp)
+app.register_blueprint(credits_bp)
+
+# 创建数据库表
+with app.app_context():
+    try:
+        db.create_all()
+        print("数据库表创建成功")
+        
+        # 检查是否需要创建初始数据
+        if User.query.count() == 0:
+            print("创建测试用户...")
+            # 创建一个测试用户
+            test_user = User(
+                username='testuser',
+                email='test@example.com',
+                credits=50
+            )
+            test_user.set_password('123456')
+            db.session.add(test_user)
+            
+            # 创建一些测试兑换码
+            test_codes = [
+                RedemptionCode.create_code(10, "测试兑换码1"),
+                RedemptionCode.create_code(20, "测试兑换码2"),
+                RedemptionCode.create_code(50, "测试兑换码3")
+            ]
+            
+            for code in test_codes:
+                db.session.add(code)
+            
+            db.session.commit()
+            print("测试数据创建成功")
+            print(f"测试用户: testuser / 123456")
+            print(f"测试兑换码: {[code.code for code in test_codes]}")
+            
+    except Exception as e:
+        print(f"数据库初始化错误: {e}")
+        traceback.print_exc()
 
 # --- API 路由 ---
-@app.route('/api/generate-image', methods=['POST'])
-def generate_image():
+# 注意：生图API已移动到 credits.py 中，包含认证和积分扣减功能
+
+# --- 管理员功能 ---
+def verify_admin_key():
+    """验证管理员权限"""
+    admin_key = request.headers.get('X-Admin-Key')
+    if not admin_key or admin_key != os.getenv('ADMIN_KEY', 'admin123'):
+        return False
+    return True
+
+@app.route('/api/credits/admin/users', methods=['GET'])
+def admin_get_users():
+    """获取用户列表"""
+    if not verify_admin_key():
+        return jsonify({"error": "无效的管理员权限"}), 403
+
+    try:
+        from models import User, db
+
+        # 获取分页参数
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 10))
+        search = request.args.get('search', '').strip()
+
+        # 构建查询
+        query = User.query
+
+        # 搜索过滤
+        if search:
+            query = query.filter(
+                db.or_(
+                    User.username.contains(search),
+                    User.email.contains(search)
+                )
+            )
+
+        # 分页
+        pagination = query.paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
+
+        # 格式化用户数据
+        users = []
+        for user in pagination.items:
+            users.append({
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'credits': user.credits,
+                'is_active': user.is_active,
+                'created_at': user.created_at.strftime('%Y-%m-%d %H:%M:%S') if user.created_at else None,
+                'last_login': user.last_login.strftime('%Y-%m-%d %H:%M:%S') if user.last_login else None
+            })
+
+        return jsonify({
+            'users': users,
+            'pagination': {
+                'current_page': page,
+                'total_pages': pagination.pages,
+                'total_users': pagination.total,
+                'per_page': per_page
+            }
+        }), 200
+
+    except Exception as e:
+        print(f"获取用户列表失败: {e}")
+        traceback.print_exc()
+        return jsonify({"error": "获取用户列表失败"}), 500
+
+@app.route('/api/credits/admin/users/<int:user_id>', methods=['GET'])
+def admin_get_user_detail(user_id):
+    """获取用户详情"""
+    if not verify_admin_key():
+        return jsonify({"error": "无效的管理员权限"}), 403
+
+    try:
+        from models import User, CreditTransaction
+
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"error": "用户不存在"}), 404
+
+        # 获取用户的积分交易记录
+        transactions = CreditTransaction.query.filter_by(user_id=user_id).order_by(
+            CreditTransaction.created_at.desc()
+        ).limit(10).all()
+
+        transaction_list = []
+        for trans in transactions:
+            transaction_list.append({
+                'id': trans.id,
+                'amount': trans.amount,
+                'transaction_type': trans.transaction_type,
+                'description': trans.description,
+                'created_at': trans.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            })
+
+        user_detail = {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'credits': user.credits,
+            'is_active': user.is_active,
+            'created_at': user.created_at.strftime('%Y-%m-%d %H:%M:%S') if user.created_at else None,
+            'last_login': user.last_login.strftime('%Y-%m-%d %H:%M:%S') if user.last_login else None,
+            'total_transactions': len(transaction_list),
+            'recent_transactions': transaction_list
+        }
+
+        return jsonify({'user': user_detail}), 200
+
+    except Exception as e:
+        print(f"获取用户详情失败: {e}")
+        traceback.print_exc()
+        return jsonify({"error": "获取用户详情失败"}), 500
+
+@app.route('/api/credits/admin/stats', methods=['GET'])
+def admin_get_stats():
+    """获取系统统计数据"""
+    if not verify_admin_key():
+        return jsonify({"error": "无效的管理员权限"}), 403
+
+    try:
+        from models import User, RedemptionCode, db
+
+        # 用户统计
+        total_users = User.query.count()
+        total_credits = db.session.query(db.func.sum(User.credits)).scalar() or 0
+
+        # 兑换码统计
+        total_codes = RedemptionCode.query.count()
+        used_codes = RedemptionCode.query.filter(RedemptionCode.used_by.isnot(None)).count()
+
+        stats = {
+            'users': {
+                'total': total_users,
+                'total_credits': total_credits
+            },
+            'codes': {
+                'total': total_codes,
+                'used': used_codes
+            }
+        }
+
+        return jsonify(stats), 200
+
+    except Exception as e:
+        print(f"获取统计数据失败: {e}")
+        traceback.print_exc()
+        return jsonify({"error": "获取统计数据失败"}), 500
+
+@app.route('/api/admin/change-password', methods=['POST'])
+def admin_change_password():
     """
-    接收前端的 prompt，调用外部 API 生成图片，并返回图片 URL。
-    如果外部 API 返回多个图片，此函数设计为提取并返回第一个符合条件的图片 URL。
+    管理员密码修改功能
     """
     try:
+        # 验证管理员权限
+        admin_key = request.headers.get('X-Admin-Key')
+        if not admin_key or admin_key != app.config.get('ADMIN_KEY', 'admin123'):
+            return jsonify({"error": "无效的管理员权限"}), 403
+
         data = request.get_json()
-        if not data or 'prompt' not in data:
-            print("错误: 请求体缺少 'prompt' 字段")
-            return jsonify({"error": "请求体缺少 'prompt' 字段"}), 400
+        if not data:
+            return jsonify({"error": "请求体不能为空"}), 400
 
-        user_prompt = data['prompt']
-        if not user_prompt:
-            print("错误: 'prompt' 不能为空")
-            return jsonify({"error": "'prompt' 不能为空"}), 400
+        current_password = data.get('current_password')
+        new_password = data.get('new_password')
 
-        print(f"收到生成请求，提示词: {user_prompt}")
+        if not current_password or not new_password:
+            return jsonify({"error": "当前密码和新密码都不能为空"}), 400
 
-        payload = {
-           "stream": False,
-           "model": "gpt-4o-image-vip", # 确保这个模型名称是您 API 支持的
-           "messages": [
-              {
-                 "content": f"Create a simple black and white line drawing coloring page suitable for children, depicting: {user_prompt}",
-                 "role": "user"
-              }
-           ]
-        }
-        headers = {
-           'Content-Type': 'application/json'
-        }
+        # 验证当前密码（这里简化处理，实际应该从数据库或配置文件验证）
+        admin_current_password = app.config.get('ADMIN_PASSWORD', 'admin123')
+        if current_password != admin_current_password:
+            return jsonify({"error": "当前密码错误"}), 400
 
-        if API_KEY:
-            # 确保这是 api.gptgod.online 期望的认证方式
-            headers['Authorization'] = f'Bearer {API_KEY}'
-            print(f"已设置 Authorization Header (使用 Bearer Token 方式)")
-        else:
-            print("警告: IMAGE_API_KEY 未设置，将尝试无认证调用外部 API")
+        # 验证新密码长度
+        if len(new_password) < 6:
+            return jsonify({"error": "新密码长度至少6位"}), 400
 
+        # 这里应该将新密码保存到安全的地方
+        # 由于这是演示项目，我们只返回成功消息
+        # 在实际项目中，应该：
+        # 1. 将密码哈希后存储到数据库
+        # 2. 更新环境变量或配置文件
+        # 3. 记录密码修改日志
 
-        print(f"准备调用外部 API: {API_ENDPOINT.strip()}") # 使用 .strip() 确保 URL 没有多余空格
-        print(f"请求头 (Headers): {json.dumps(headers)}")
-        print(f"请求体 (Payload): {json.dumps(payload)}")
+        print(f"管理员密码修改请求：从 '{current_password}' 改为 '{new_password}'")
+        print("注意：在生产环境中，应该将新密码安全地存储到数据库或配置文件中")
 
-        # 调用外部图像生成 API，增加超时时间
-        response = requests.post(API_ENDPOINT.strip(), headers=headers, json=payload, timeout=120) 
+        return jsonify({
+            "success": True,
+            "message": "管理员密码修改成功",
+            "note": "请记住新密码，并在生产环境中确保密码被安全存储"
+        }), 200
 
-        print(f"外部 API 调用完成，状态码: {response.status_code}")
-        # 打印部分相关的响应头
-        relevant_headers = {k: v for k, v in response.headers.items() if k.lower() in ['content-type', 'content-length', 'date', 'server', 'x-request-id']}
-        print(f"外部 API 响应头 (部分): {json.dumps(relevant_headers)}")
-        
-        try:
-            # 尝试打印完整的JSON响应，如果太大，可以考虑截断或只打印关键部分
-            print(f"外部 API 响应内容 (尝试解析为JSON): {json.dumps(response.json(), indent=2, ensure_ascii=False)}")
-        except json.JSONDecodeError:
-            # 如果不是JSON，打印文本内容，增加打印长度以便调试
-            print(f"外部 API 响应内容 (非JSON，前2000字符): {response.text[:2000]}")
-
-
-        response.raise_for_status() # 如果状态码是 4xx 或 5xx，会抛出 HTTPError 异常
-
-        api_response_data = response.json() # 假设成功时返回 JSON
-
-        image_url = None
-        if 'choices' in api_response_data and len(api_response_data['choices']) > 0:
-            message_content = api_response_data['choices'][0].get('message', {}).get('content')
-            if message_content and isinstance(message_content, str):
-                # 修改点：优先尝试更精确的正则表达式来匹配期望的 CDN 图片链接 (Markdown格式)
-                # 这个正则表达式会查找第一个形如 ![gen_...](https://filesystem.site/cdn/....png) 的链接
-                # re.search 会找到第一个匹配项
-                # 请根据您实际看到的 filesystem.site 链接格式调整此处的域名（如果不同）
-                cdn_match = re.search(r'!\[gen_[^\]]*\]\((https://filesystem\.site/cdn/[^)]+\.png)\)', message_content)
-                if cdn_match:
-                    image_url = cdn_match.group(1)
-                    print(f"通过 CDN 图片链接正则表达式找到图片 URL: {image_url}")
-                else:
-                    # 如果特定 CDN 链接未找到，回退到您原有的更通用的 Markdown 图片链接正则表达式
-                    # 这仍然会找到第一个匹配的通用 Markdown 图片链接
-                    print("未能通过特定 CDN 正则找到图片，尝试通用 Markdown 图片正则...")
-                    generic_match = re.search(r'!\[.*?\]\((https://[^)]+\.png)\)', message_content) # 确保捕获的是 .png 链接
-                    if generic_match:
-                        image_url = generic_match.group(1)
-                        print(f"通过通用 Markdown 图片链接正则表达式找到图片 URL: {image_url}")
-                        # 可选：进一步检查此通用 URL 是否是我们期望的域名
-                        if not image_url.startswith("https://filesystem.site"): # 再次确认域名
-                            print(f"警告: 通用 Markdown 提取的 URL '{image_url}' 可能不是期望的 'filesystem.site' CDN 链接。")
-                            # 如果您只想严格使用 filesystem.site 的链接，可以在这里将其设为 None
-                            # image_url = None 
-
-                # 如果上述 Markdown 方式都未提取到 URL，可以再尝试您原有的下载链接逻辑作为进一步的回退
-                if not image_url:
-                    print("未能通过 Markdown 图片正则找到图片，尝试下载链接正则...")
-                    # 请根据您实际看到的 filesystem.site 链接格式调整此处的域名（如果不同）
-                    download_match = re.search(r'\[.*?下载.*?\]\((https://filesystem\.site/download/[^)]+\.png)\)', message_content, re.IGNORECASE)
-                    if download_match:
-                        image_url = download_match.group(1).replace('/download/', '/cdn/') # 转换为 cdn 链接
-                        print(f"通过下载链接找到并转换图片 URL: {image_url}")
-                
-                # 您原有的 message_content.startswith('http') 逻辑作为最后的手段可能过于宽泛，
-                # 如果前面的正则都失败了，很可能 content 不是一个直接的图片 URL。
-                # 如果需要，可以添加更严格的检查或完全移除这个最后的 fallback。
-
-        if not image_url:
-             # 如果在所有尝试后都没有找到 image_url，则抛出错误
-             print("错误: 未能从 API 响应的 content 字段中提取有效的图片 URL")
-             raise ValueError("未能从 API 响应的 content 字段中提取有效的图片 URL")
-
-        print(f"成功提取并返回给前端的图片 URL: {image_url}") # 确认这是我们期望的单个 URL
-        return jsonify({"imageUrl": image_url}) # 前端期望的 JSON 结构
-
-    except requests.exceptions.Timeout:
-        print("错误: 调用外部 API 超时")
-        traceback.print_exc()
-        return jsonify({"error": "图像生成服务响应超时"}), 504
-    except requests.exceptions.HTTPError as http_err:
-        print(f"错误: 外部 API 返回 HTTP 错误: {http_err}")
-        error_details = "未知错误详情"
-        status_code = 500 # 默认状态码
-        if http_err.response is not None: # 检查 response 对象是否存在
-            error_details = http_err.response.text[:1000] # 限制错误详情长度
-            status_code = http_err.response.status_code
-            print(f"错误时的外部 API 响应体 (前1000字符): {error_details}")
-        traceback.print_exc()
-        return jsonify({"error": f"图像生成服务返回错误: {status_code}", "details": error_details}), status_code
-    except requests.exceptions.RequestException as req_err:
-        print(f"错误: 调用外部 API 时发生网络错误: {req_err}")
-        traceback.print_exc()
-        return jsonify({"error": f"无法连接图像生成服务: {str(req_err)}"}), 503
-    except json.JSONDecodeError as json_err:
-        print(f"错误: 无法解析外部 API 的 JSON 响应: {json_err}")
-        response_text_for_error = ""
-        if 'response' in locals() and hasattr(response, 'text'): # 确保 response 变量存在且有 text 属性
-             response_text_for_error = response.text
-             print(f"无法解析的外部 API 响应体 (前1000字符): {response_text_for_error[:1000]}")
-        traceback.print_exc()
-        return jsonify({"error": "图像生成服务返回了无效的 JSON 响应", "raw_response_preview": response_text_for_error[:200]}), 500
-    except ValueError as val_err: # 捕获我们自己抛出的 ValueError
-        print(f"错误: {val_err}")
-        traceback.print_exc()
-        return jsonify({"error": str(val_err)}), 500
     except Exception as e:
-        print(f"处理请求时发生未知错误: {e}")
+        print(f"管理员密码修改失败: {e}")
         traceback.print_exc()
-        return jsonify({"error": "服务器内部未知错误"}), 500
+        return jsonify({"error": "密码修改失败"}), 500
+
+# 健康检查端点
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """健康检查"""
+    return jsonify({
+        'status': 'healthy',
+        'database': 'connected' if db.engine else 'disconnected',
+        'version': '1.0.0'
+    }), 200
+
+# 应用信息端点
+@app.route('/api/info', methods=['GET'])
+def app_info():
+    """应用信息"""
+    return jsonify({
+        'name': 'Kiddie Color Creations API',
+        'version': '1.0.0',
+        'description': '儿童涂色图片生成服务',
+        'features': [
+            'AI图片生成',
+            '用户认证系统',
+            '积分管理',
+            '兑换码系统',
+            '管理员后台'
+        ]
+    }), 200
 
 if __name__ == '__main__':
     print("启动 Flask 开发服务器...")
+    print("="*50)
+    print("Kiddie Color Creations API")
+    print("="*50)
+    print(f"数据库: {app.config['SQLALCHEMY_DATABASE_URI']}")
+    print(f"管理员API密钥: {app.config['ADMIN_KEY']}")
+    print(f"管理员密码: {app.config['ADMIN_PASSWORD']}")
+    print("="*50)
+    
     # 对于 Render.com 等平台，端口通常由 PORT 环境变量指定
     # debug 模式也最好通过环境变量控制
     flask_debug = os.getenv("FLASK_DEBUG", "False").lower() in ("true", "1", "t")

@@ -328,7 +328,32 @@
                 </button>
             </div>
         </div>
-        
+
+        <!-- 管理员密码修改 -->
+        <div class="admin-section">
+            <h3><i class="fas fa-key"></i> 修改管理员密码</h3>
+            <form id="admin-change-password-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="admin-current-password">当前密码</label>
+                        <input type="password" id="admin-current-password" name="current_password" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="admin-new-password">新密码</label>
+                        <input type="password" id="admin-new-password" name="new_password" required minlength="6">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="admin-confirm-password">确认新密码</label>
+                    <input type="password" id="admin-confirm-password" name="confirm_password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-shield-alt"></i> 修改密码
+                </button>
+            </form>
+            <div id="admin-password-message" class="message" style="display: none;"></div>
+        </div>
+
         <!-- 用户管理 -->
         <div class="admin-section">
             <h3><i class="fas fa-users"></i> 用户管理</h3>
@@ -432,7 +457,10 @@
 
         // 管理员登录
         function adminLogin(username, password) {
-            if (username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
+            // 获取当前有效的管理员密码（优先使用localStorage中的新密码）
+            const currentAdminPassword = localStorage.getItem('admin_password') || ADMIN_CREDENTIALS.password;
+
+            if (username === ADMIN_CREDENTIALS.username && password === currentAdminPassword) {
                 localStorage.setItem('adminLoggedIn', 'true');
                 showAdminMain();
                 showMessage('登录成功！', 'success');
@@ -542,6 +570,10 @@
         // 加载用户列表
         async function loadUsers(page = 1, search = null) {
             try {
+                console.log('开始加载用户列表...');
+                console.log('API_BASE_URL:', API_BASE_URL);
+                console.log('ADMIN_KEY:', ADMIN_KEY);
+
                 if (search !== null) {
                     currentSearch = search;
                 }
@@ -561,13 +593,21 @@
                     params.append('search', search);
                 }
 
-                const response = await fetch(`${API_BASE_URL}/credits/admin/users?${params}`, {
+                const url = `${API_BASE_URL}/credits/admin/users?${params}`;
+                console.log('请求URL:', url);
+                console.log('请求头:', { 'X-Admin-Key': ADMIN_KEY });
+
+                const response = await fetch(url, {
                     headers: {
                         'X-Admin-Key': ADMIN_KEY
                     }
                 });
 
+                console.log('响应状态:', response.status);
+                console.log('响应头:', response.headers);
+
                 const data = await response.json();
+                console.log('响应数据:', data);
 
                 if (!response.ok) {
                     throw new Error(data.error || '获取用户列表失败');
@@ -577,7 +617,16 @@
                 updatePagination(data.pagination);
 
             } catch (error) {
-                document.getElementById('users-table').innerHTML = `<div class="error">获取用户列表失败: ${error.message}</div>`;
+                console.error('加载用户列表错误:', error);
+                console.error('错误类型:', error.constructor.name);
+                console.error('错误堆栈:', error.stack);
+
+                let errorMessage = `获取用户列表失败: ${error.message}`;
+                if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    errorMessage += '<br><small>提示：请确保后端服务器正在运行在 http://127.0.0.1:5000</small>';
+                }
+
+                document.getElementById('users-table').innerHTML = `<div class="error">${errorMessage}</div>`;
             }
         }
 
@@ -996,8 +1045,98 @@
             await generateCode(creditsValue, description, expiresDays);
         });
 
-        // 页面加载时检查登录状态
+        // 管理员密码修改表单提交
+        document.getElementById('admin-change-password-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+
+            const currentPassword = formData.get('current_password');
+            const newPassword = formData.get('new_password');
+            const confirmPassword = formData.get('confirm_password');
+
+            // 验证新密码
+            if (newPassword.length < 6) {
+                showAdminPasswordMessage('新密码长度至少6位', 'error');
+                return;
+            }
+
+            if (newPassword !== confirmPassword) {
+                showAdminPasswordMessage('两次输入的新密码不一致', 'error');
+                return;
+            }
+
+            // 验证当前密码（与登录逻辑保持一致）
+            const currentAdminPassword = localStorage.getItem('admin_password') || ADMIN_CREDENTIALS.password;
+            console.log('密码验证调试信息:');
+            console.log('- 用户输入的当前密码:', currentPassword);
+            console.log('- localStorage中的密码:', localStorage.getItem('admin_password'));
+            console.log('- ADMIN_CREDENTIALS.password:', ADMIN_CREDENTIALS.password);
+            console.log('- 实际验证使用的密码:', currentAdminPassword);
+
+            if (currentPassword !== currentAdminPassword) {
+                showAdminPasswordMessage('当前密码错误', 'error');
+                return;
+            }
+
+            await changeAdminPassword(currentPassword, newPassword);
+        });
+
+        // 管理员密码修改功能（本地版本）
+        async function changeAdminPassword(currentPassword, newPassword) {
+            try {
+                // 模拟API调用延迟
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // 本地密码修改逻辑
+                console.log(`管理员密码修改：从 '${currentPassword}' 改为 '${newPassword}'`);
+
+                // 更新内存中的密码对象
+                ADMIN_CREDENTIALS.password = newPassword;
+
+                // 将新密码保存到localStorage（持久化存储）
+                localStorage.setItem('admin_password', newPassword);
+
+                showAdminPasswordMessage('管理员密码修改成功！', 'success');
+
+                // 清空表单
+                document.getElementById('admin-change-password-form').reset();
+
+                // 3秒后自动隐藏消息
+                setTimeout(() => {
+                    hideAdminPasswordMessage();
+                }, 3000);
+
+                console.log('管理员密码已更新：内存和本地存储都已同步');
+
+            } catch (error) {
+                console.error('修改管理员密码失败:', error);
+                showAdminPasswordMessage(`密码修改失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 显示管理员密码修改消息
+        function showAdminPasswordMessage(message, type = 'info') {
+            const messageElement = document.getElementById('admin-password-message');
+            messageElement.textContent = message;
+            messageElement.className = `message ${type}`;
+            messageElement.style.display = 'block';
+        }
+
+        // 隐藏管理员密码修改消息
+        function hideAdminPasswordMessage() {
+            const messageElement = document.getElementById('admin-password-message');
+            messageElement.style.display = 'none';
+        }
+
+        // 页面加载时检查登录状态和同步密码
         document.addEventListener('DOMContentLoaded', () => {
+            // 同步密码状态：如果localStorage中有新密码，更新内存中的密码
+            const storedPassword = localStorage.getItem('admin_password');
+            if (storedPassword) {
+                ADMIN_CREDENTIALS.password = storedPassword;
+                console.log('页面加载时同步密码：从localStorage恢复管理员密码');
+            }
+
             checkAdminLogin();
         });
 

@@ -117,8 +117,8 @@ function updateUI() {
         document.getElementById('username-display').textContent = currentUser.username;
         document.getElementById('credits-count').textContent = currentUser.credits;
         
-        // 检查积分余额
-        if (currentUser.credits < 1) {
+        // 检查积分余额（需要2积分：图片+配色）
+        if (currentUser.credits < 2) {
             generateButton.disabled = true;
             generateButton.innerHTML = '<i class="fas fa-coins"></i> 积分不足';
         }

@@ -23,7 +23,7 @@ class User(db.Model):
     password_hash = db.Column(db.String(128), nullable=False)
     credits = db.Column(db.Integer, default=0, nullable=False)  # 积分余额
     is_active = db.Column(db.Boolean, default=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
     last_login = db.Column(db.DateTime)
     
     # 关联关系
@@ -100,7 +100,7 @@ class RedemptionCode(db.Model):
     is_used = db.Column(db.Boolean, default=False, nullable=False)
     used_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     used_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
     expires_at = db.Column(db.DateTime, nullable=True)  # 过期时间，可为空表示永不过期
     description = db.Column(db.String(200), nullable=True)  # 兑换码描述
     
@@ -124,7 +124,7 @@ class RedemptionCode(db.Model):
         
         expires_at = None
         if expires_days:
-            expires_at = datetime.utcnow() + timedelta(days=expires_days)
+            expires_at = datetime.now() + timedelta(days=expires_days)
         
         redemption_code = cls(
             code=code,
@@ -140,7 +140,7 @@ class RedemptionCode(db.Model):
         if self.is_used:
             return False, "兑换码已被使用"
         
-        if self.expires_at and datetime.utcnow() > self.expires_at:
+        if self.expires_at and datetime.now() > self.expires_at:
             return False, "兑换码已过期"
         
         return True, "兑换码有效"
@@ -154,7 +154,7 @@ class RedemptionCode(db.Model):
         # 标记为已使用
         self.is_used = True
         self.used_by_user_id = user.id
-        self.used_at = datetime.utcnow()
+        self.used_at = datetime.now()
         
         # 给用户增加积分
         description = f"兑换码充值: {self.code}"
@@ -209,7 +209,7 @@ class UserSession(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     session_token = db.Column(db.String(128), unique=True, nullable=False, index=True)
     expires_at = db.Column(db.DateTime, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
     
     user = db.relationship('User', backref='sessions')
     
@@ -217,7 +217,7 @@ class UserSession(db.Model):
     def create_session(cls, user, expires_hours=24):
         """创建新会话"""
         session_token = secrets.token_urlsafe(64)
-        expires_at = datetime.utcnow() + timedelta(hours=expires_hours)
+        expires_at = datetime.now() + timedelta(hours=expires_hours)
         
         session = cls(
             user_id=user.id,
@@ -229,7 +229,7 @@ class UserSession(db.Model):
     
     def is_valid(self):
         """检查会话是否有效"""
-        return datetime.utcnow() < self.expires_at
+        return datetime.now() < self.expires_at
     
     def to_dict(self):
         """转换为字典格式"""
