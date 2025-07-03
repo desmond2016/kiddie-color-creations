@@ -39,7 +39,13 @@ app.config['ADMIN_PASSWORD'] = os.getenv('ADMIN_PASSWORD', 'admin123')
 
 # 初始化扩展
 CORS(app,
-     origins=['http://localhost:8080', 'http://127.0.0.1:8080', 'null'],  # 'null' 允许 file:// 协议
+     origins=[
+         'http://localhost:8080',
+         'http://127.0.0.1:8080',
+         'https://*.pages.dev',  # Cloudflare Pages域名
+         'https://*.cloudflare.app',  # Cloudflare应用域名
+         'null'  # 'null' 允许 file:// 协议
+     ],
      allow_headers=['Content-Type', 'Authorization', 'X-Admin-Key'],
      methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
      supports_credentials=True)
@@ -295,12 +301,38 @@ def admin_change_password():
         traceback.print_exc()
         return jsonify({"error": "密码修改失败"}), 500
 
+# 根路径路由
+@app.route('/', methods=['GET'])
+def root():
+    """根路径"""
+    return jsonify({
+        'message': 'Kiddie Color Creations API',
+        'version': '1.0.0',
+        'status': 'running',
+        'endpoints': {
+            'health': '/api/health',
+            'auth': '/api/auth/*',
+            'credits': '/api/credits/*'
+        }
+    }), 200
+
 # 健康检查端点
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """健康检查"""
     return jsonify({
         'status': 'healthy',
+        'database': 'connected' if db.engine else 'disconnected',
+        'version': '1.0.0'
+    }), 200
+
+# 健康检查端点（兼容render.yaml配置）
+@app.route('/api/auth/health', methods=['GET'])
+def auth_health_check():
+    """认证模块健康检查"""
+    return jsonify({
+        'status': 'healthy',
+        'module': 'auth',
         'database': 'connected' if db.engine else 'disconnected',
         'version': '1.0.0'
     }), 200
