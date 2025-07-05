@@ -23,3 +23,4 @@ const CONFIG = {
 
 // 导出配置
 window.CONFIG = CONFIG;
+
