@@ -38,17 +38,7 @@ app.config['ADMIN_KEY'] = os.getenv('ADMIN_KEY', 'admin123')
 app.config['ADMIN_PASSWORD'] = os.getenv('ADMIN_PASSWORD', 'admin123')
 
 # 初始化扩展
-CORS(app,
-     origins=[
-         'http://localhost:8080',
-         'http://127.0.0.1:8080',
-         'https://*.pages.dev',  # Cloudflare Pages域名
-         'https://*.cloudflare.app',  # Cloudflare应用域名
-         'null'  # 'null' 允许 file:// 协议
-     ],
-     allow_headers=['Content-Type', 'Authorization', 'X-Admin-Key'],
-     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-     supports_credentials=True)
+CORS(app, origins='*')
 db.init_app(app)
 jwt = JWTManager(app)
 
