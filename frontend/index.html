@@ -268,6 +268,115 @@
         </div>
     </footer>
 
+    <div id="message-container"></div>
+
+    <script>
+        // 全局消息提示函数
+        function showMessage(message, type = 'success') {
+            const container = document.getElementById('message-container');
+            if (!container) {
+                console.error('Message container not found!');
+                return;
+            }
+
+            const messageElement = document.createElement('div');
+            messageElement.className = `alert alert-${type}`;
+            messageElement.textContent = message;
+            messageElement.style.position = 'fixed';
+            messageElement.style.top = '20px';
+            messageElement.style.right = '20px';
+            messageElement.style.zIndex = '1050';
+            messageElement.style.padding = '15px';
+            messageElement.style.borderRadius = '5px';
+            messageElement.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
+            messageElement.style.opacity = '0';
+            messageElement.style.transition = 'opacity 0.5s, transform 0.5s';
+            messageElement.style.transform = 'translateY(-20px)';
+            
+            if(type === 'success') {
+                messageElement.style.backgroundColor = '#d4edda';
+                messageElement.style.color = '#155724';
+                messageElement.style.borderColor = '#c3e6cb';
+            } else {
+                messageElement.style.backgroundColor = '#f8d7da';
+                messageElement.style.color = '#721c24';
+                messageElement.style.borderColor = '#f5c6cb';
+            }
+
+            container.appendChild(messageElement);
+
+            // Fade in and slide in
+            setTimeout(() => {
+                messageElement.style.opacity = '1';
+                messageElement.style.transform = 'translateY(0)';
+            }, 10);
+
+            // Automatically remove after 3 seconds
+            setTimeout(() => {
+                messageElement.style.opacity = '0';
+                messageElement.style.transform = 'translateY(-20px)';
+                setTimeout(() => {
+                    container.removeChild(messageElement);
+                }, 500);
+            }, 3000);
+        }
+    </script>
+
+    <script src="config.js"></script>
+    <div id="message-container"></div>
+
+    <script>
+        // 全局消息提示函数
+        function showMessage(message, type = 'success') {
+            const container = document.getElementById('message-container');
+            if (!container) {
+                console.error('Message container not found!');
+                return;
+            }
+
+            const messageElement = document.createElement('div');
+            messageElement.className = `alert alert-${type}`;
+            messageElement.textContent = message;
+            messageElement.style.position = 'fixed';
+            messageElement.style.top = '20px';
+            messageElement.style.right = '20px';
+            messageElement.style.zIndex = '1050';
+            messageElement.style.padding = '15px';
+            messageElement.style.borderRadius = '5px';
+            messageElement.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
+            messageElement.style.opacity = '0';
+            messageElement.style.transition = 'opacity 0.5s, transform 0.5s';
+            messageElement.style.transform = 'translateY(-20px)';
+            
+            if(type === 'success') {
+                messageElement.style.backgroundColor = '#d4edda';
+                messageElement.style.color = '#155724';
+                messageElement.style.borderColor = '#c3e6cb';
+            } else {
+                messageElement.style.backgroundColor = '#f8d7da';
+                messageElement.style.color = '#721c24';
+                messageElement.style.borderColor = '#f5c6cb';
+            }
+
+            container.appendChild(messageElement);
+
+            // Fade in and slide in
+            setTimeout(() => {
+                messageElement.style.opacity = '1';
+                messageElement.style.transform = 'translateY(0)';
+            }, 10);
+
+            // Automatically remove after 3 seconds
+            setTimeout(() => {
+                messageElement.style.opacity = '0';
+                messageElement.style.transform = 'translateY(-20px)';
+                setTimeout(() => {
+                    container.removeChild(messageElement);
+                }, 500);
+            }, 3000);
+        }
+    </script>
+
     <script src="auth.js"></script>
     <script>
         // 设置当前年份
