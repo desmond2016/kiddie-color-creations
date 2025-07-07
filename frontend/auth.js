@@ -8,37 +8,9 @@
 let currentUser = null;
 let authToken = null;
 
-// API配置
-const API_BASE_URL = 'http://127.0.0.1:5000/api';
-
-// DOM元素
-const authModal = document.getElementById('auth-modal');
-const redeemModal = document.getElementById('redeem-modal');
-const historyModal = document.getElementById('history-modal');
-
-// 工具函数
-function showMessage(elementId, message, type = 'info') {
-    const messageEl = document.getElementById(elementId);
-    messageEl.textContent = message;
-    messageEl.className = `message ${type}`;
-    messageEl.style.display = 'block';
-    
-    // 3秒后自动隐藏成功消息
-    if (type === 'success') {
-        setTimeout(() => {
-            messageEl.style.display = 'none';
-        }, 3000);
-    }
-}
-
-function hideMessage(elementId) {
-    const messageEl = document.getElementById(elementId);
-    messageEl.style.display = 'none';
-}
-
 // API请求函数
 async function apiRequest(endpoint, options = {}) {
-    const url = `${API_BASE_URL}${endpoint}`;
+    const url = `${window.CONFIG.API_BASE_URL}${endpoint}`;
 
     // 构建headers
     const headers = {
