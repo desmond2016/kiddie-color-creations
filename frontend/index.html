@@ -6,7 +6,6 @@
     <title>Kiddie Color Creations - 儿童涂色创作平台</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <script src="config.js"></script>
 </head>
 <body>
     <header class="site-header">
@@ -58,7 +57,7 @@
     <div id="auth-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="auth-modal-title">用户登录</h2>
+                <h2 id="auth-modal-title">��户登录</h2>
                 <span class="close" id="close-auth-modal">&times;</span>
             </div>
             <div class="modal-body">
@@ -270,113 +269,7 @@
 
     <div id="message-container"></div>
 
-    <script>
-        // 全局消息提示函数
-        function showMessage(message, type = 'success') {
-            const container = document.getElementById('message-container');
-            if (!container) {
-                console.error('Message container not found!');
-                return;
-            }
-
-            const messageElement = document.createElement('div');
-            messageElement.className = `alert alert-${type}`;
-            messageElement.textContent = message;
-            messageElement.style.position = 'fixed';
-            messageElement.style.top = '20px';
-            messageElement.style.right = '20px';
-            messageElement.style.zIndex = '1050';
-            messageElement.style.padding = '15px';
-            messageElement.style.borderRadius = '5px';
-            messageElement.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
-            messageElement.style.opacity = '0';
-            messageElement.style.transition = 'opacity 0.5s, transform 0.5s';
-            messageElement.style.transform = 'translateY(-20px)';
-            
-            if(type === 'success') {
-                messageElement.style.backgroundColor = '#d4edda';
-                messageElement.style.color = '#155724';
-                messageElement.style.borderColor = '#c3e6cb';
-            } else {
-                messageElement.style.backgroundColor = '#f8d7da';
-                messageElement.style.color = '#721c24';
-                messageElement.style.borderColor = '#f5c6cb';
-            }
-
-            container.appendChild(messageElement);
-
-            // Fade in and slide in
-            setTimeout(() => {
-                messageElement.style.opacity = '1';
-                messageElement.style.transform = 'translateY(0)';
-            }, 10);
-
-            // Automatically remove after 3 seconds
-            setTimeout(() => {
-                messageElement.style.opacity = '0';
-                messageElement.style.transform = 'translateY(-20px)';
-                setTimeout(() => {
-                    container.removeChild(messageElement);
-                }, 500);
-            }, 3000);
-        }
-    </script>
-
     <script src="config.js"></script>
-    <div id="message-container"></div>
-
-    <script>
-        // 全局消息提示函数
-        function showMessage(message, type = 'success') {
-            const container = document.getElementById('message-container');
-            if (!container) {
-                console.error('Message container not found!');
-                return;
-            }
-
-            const messageElement = document.createElement('div');
-            messageElement.className = `alert alert-${type}`;
-            messageElement.textContent = message;
-            messageElement.style.position = 'fixed';
-            messageElement.style.top = '20px';
-            messageElement.style.right = '20px';
-            messageElement.style.zIndex = '1050';
-            messageElement.style.padding = '15px';
-            messageElement.style.borderRadius = '5px';
-            messageElement.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
-            messageElement.style.opacity = '0';
-            messageElement.style.transition = 'opacity 0.5s, transform 0.5s';
-            messageElement.style.transform = 'translateY(-20px)';
-            
-            if(type === 'success') {
-                messageElement.style.backgroundColor = '#d4edda';
-                messageElement.style.color = '#155724';
-                messageElement.style.borderColor = '#c3e6cb';
-            } else {
-                messageElement.style.backgroundColor = '#f8d7da';
-                messageElement.style.color = '#721c24';
-                messageElement.style.borderColor = '#f5c6cb';
-            }
-
-            container.appendChild(messageElement);
-
-            // Fade in and slide in
-            setTimeout(() => {
-                messageElement.style.opacity = '1';
-                messageElement.style.transform = 'translateY(0)';
-            }, 10);
-
-            // Automatically remove after 3 seconds
-            setTimeout(() => {
-                messageElement.style.opacity = '0';
-                messageElement.style.transform = 'translateY(-20px)';
-                setTimeout(() => {
-                    container.removeChild(messageElement);
-                }, 500);
-            }, 3000);
-        }
-    </script>
-
     <script src="auth.js"></script>
     <script>
         // 设置当前年份
@@ -385,12 +278,36 @@
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', () => {
             console.log('页面加载完成，初始化认证系统');
-
-            // 检查登录状态并更新UI
-            authSystem.updateUI();
+            
+            // 初始化认证系统
+            initAuth();
 
             // 绑定认证相关事件
             bindAuthEvents();
+
+            // 恢复页面状态
+            loadCurrentState();
+
+            // 监听页面可见性变化，防止状态丢失
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    // 页面重新可见时，检查并恢复状态
+                    console.log('页面重新可见，检查状态...');
+                    setTimeout(() => {
+                        // 检查认证状态
+                        if (localStorage.getItem('authToken') && !authSystem.getAuthToken()) {
+                            console.log('检测到认证状态异常，正在恢复...');
+                            authSystem.updateUI();
+                        }
+
+                        // 检查页面状态
+                        if (currentImageData.url && (!mainImage.src || mainImage.style.display === 'none')) {
+                            console.log('检测到页面状态异常，正在恢复...');
+                            restoreUIState();
+                        }
+                    }, 100);
+                }
+            });
         });
 
         function bindAuthEvents() {
@@ -612,7 +529,7 @@
 
                 if (savedImageData) {
                     currentImageData = JSON.parse(savedImageData);
-                    console.log('恢复图片状态:', currentImageData);
+                    console.log('恢��图片状态:', currentImageData);
                 }
 
                 if (savedColorPalette) {
@@ -656,12 +573,6 @@
             }
         }
 
-        // 原始的生成按钮事件监听器已被移除，现在使用带认证的版本（在页面底部）
-
-        // 第一个updateColorPalette函数已删除，使用页面底部的版本
-
-
-
         // 复制颜色到剪贴板
         function copyColorToClipboard(color, element) {
             navigator.clipboard.writeText(color).then(() => {
@@ -681,24 +592,6 @@
                 // 降级方案：显示颜色值
                 alert(`颜色代码: ${color}`);
             });
-        }
-
-        // 显示消息的辅助函数
-        function showMessage(elementId, message, type = 'info') {
-            const element = document.getElementById(elementId);
-            if (element) {
-                element.textContent = message;
-                element.className = `message ${type}`;
-                element.style.display = 'block';
-            }
-        }
-
-        // 隐藏消息的辅助函数
-        function hideMessage(elementId) {
-            const element = document.getElementById(elementId);
-            if (element) {
-                element.style.display = 'none';
-            }
         }
 
         // 切换登录/注册表单
@@ -840,286 +733,6 @@
             }
         }
 
-        // 设置当前年份
-        document.getElementById('current-year').textContent = new Date().getFullYear();
-
-        // 全局变量
-        let currentPrompt = '';
-
-        // 页面加载完成后初始化
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('页面加载完成，初始化认证系统');
-
-            // 检查登录状态
-            authSystem.updateUI();
-
-            // 恢复页面状态
-            loadCurrentState();
-
-            // 监听页面可见性变化，防止状态丢失
-            document.addEventListener('visibilitychange', () => {
-                if (!document.hidden) {
-                    // 页面重新可见时，检查并恢复状态
-                    console.log('页面重新可见，检查状态...');
-                    setTimeout(() => {
-                        // 检查认证状态
-                        if (localStorage.getItem('authToken') && !authSystem.getAuthToken()) {
-                            console.log('检测到认证状态异常，正在恢复...');
-                            authSystem.updateUI();
-                        }
-
-                        // 检查页面状态
-                        if (currentImageData.url && (!mainImage.src || mainImage.style.display === 'none')) {
-                            console.log('检测到页面状态异常，正在恢复...');
-                            restoreUIState();
-                        }
-                    }, 100);
-                }
-            });
-            
-            // 注意：事件绑定已在 bindAuthEvents() 中处理
-        });
-
-        function bindEventListeners() {
-            // 注意：登录/注册按钮的事件绑定已在 bindAuthEvents() 中处理
-
-            // 用户菜单
-            document.getElementById('user-menu-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                const dropdown = document.getElementById('user-dropdown');
-                dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
-            });
-
-            // 点击其他地方关闭下拉菜单
-            document.addEventListener('click', () => {
-                authSystem.closeUserDropdown();
-            });
-
-            // 模态框关闭按钮
-            document.getElementById('close-login-modal').addEventListener('click', () => {
-                authSystem.closeModal('login-modal');
-            });
-            
-            document.getElementById('close-register-modal').addEventListener('click', () => {
-                authSystem.closeModal('register-modal');
-            });
-            
-            document.getElementById('close-redeem-modal').addEventListener('click', () => {
-                authSystem.closeModal('redeem-modal');
-            });
-            
-            document.getElementById('close-history-modal').addEventListener('click', () => {
-                authSystem.closeModal('history-modal');
-            });
-
-            document.getElementById('close-change-password-modal').addEventListener('click', () => {
-                authSystem.closeModal('change-password-modal');
-            });
-
-            // 用户下拉菜单项
-            document.getElementById('redeem-code-btn').addEventListener('click', (e) => {
-                e.preventDefault();
-                authSystem.closeUserDropdown();
-                authSystem.openModal('redeem-modal');
-            });
-
-            document.getElementById('transaction-history-btn').addEventListener('click', (e) => {
-                e.preventDefault();
-                authSystem.closeUserDropdown();
-                authSystem.openModal('history-modal');
-                authSystem.loadTransactionHistory();
-            });
-
-            document.getElementById('change-password-btn').addEventListener('click', (e) => {
-                e.preventDefault();
-                authSystem.closeUserDropdown();
-                authSystem.openModal('change-password-modal');
-            });
-
-            document.getElementById('logout-btn').addEventListener('click', (e) => {
-                e.preventDefault();
-                authSystem.logout();
-            });
-
-            // 表单提交
-            document.getElementById('login-form').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                await authSystem.login(formData.get('login'), formData.get('password'));
-            });
-
-            document.getElementById('register-form').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                await authSystem.register(
-                    formData.get('username'),
-                    formData.get('email'),
-                    formData.get('password')
-                );
-            });
-
-            // 兑换码表单提交
-            document.getElementById('redeem-form').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                const code = formData.get('code').trim().toUpperCase();
-
-                if (code.length !== 16) {
-                    showMessage('redeem-message', '兑换码必须是16位', 'error');
-                    return;
-                }
-
-                await authSystem.redeemCode(code);
-            });
-
-            // 修改密码表单提交
-            document.getElementById('change-password-form').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                const currentPassword = formData.get('current_password');
-                const newPassword = formData.get('new_password');
-                const confirmPassword = formData.get('confirm_password');
-
-                if (newPassword !== confirmPassword) {
-                    showMessage('change-password-message', '两次输入的新密码不一致', 'error');
-                    return;
-                }
-
-                await authSystem.changePassword(currentPassword, newPassword, confirmPassword);
-            });
-
-            // 生成按钮
-            document.getElementById('generate-button').addEventListener('click', generateImageWithAuth);
-            
-            // 重新生成按钮
-            document.getElementById('regenerate-btn').addEventListener('click', generateImageWithAuth);
-            
-            // 下载链接已经是<a>标签，不需要额外的事件监听器
-        }
-
-        // 带认证的图片生成函数
-        async function generateImageWithAuth() {
-            const prompt = document.getElementById('prompt-input').value.trim();
-
-            if (!prompt) {
-                showMessage('error-message', '请输入图片描述！', 'error');
-                document.getElementById('prompt-input').focus();
-                return;
-            }
-
-            // 检查登录状态
-            if (!authSystem.getCurrentUser() || !authSystem.getAuthToken()) {
-                showMessage('error-message', '请先登录后再使用生成功能', 'error');
-                authSystem.openModal('login-modal');
-                return;
-            }
-
-            // 检查积分余额（需要2积分：1积分生成图片 + 1积分生成配色）
-            const currentUser = authSystem.getCurrentUser();
-            if (!currentUser || currentUser.credits < 2) {
-                showMessage('error-message', '积分余额不足，需要2积分（图片+配色），请先兑换积分', 'error');
-                return;
-            }
-
-            const loadingIndicator = document.getElementById('loading-indicator');
-            const placeholderContent = document.getElementById('placeholder-content');
-            const mainImage = document.getElementById('main-coloring-image');
-            const generateButton = document.getElementById('generate-button');
-            const errorMessage = document.getElementById('error-message');
-
-            loadingIndicator.style.display = 'flex';
-            placeholderContent.style.display = 'none';
-            mainImage.style.opacity = '0.5';
-            generateButton.disabled = true;
-            generateButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 生成中...';
-            hideMessage('error-message');
-
-            try {
-                console.log('开始生成图片，prompt:', prompt);
-                console.log('使用token:', authSystem.getAuthToken());
-
-                const response = await fetch(CONFIG.API_BASE_URL + '/credits/generate-image', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authSystem.getAuthToken()}`
-                    },
-                    body: JSON.stringify({ prompt: prompt })
-                });
-
-                console.log('生成图片响应状态:', response.status);
-                console.log('生成图片响应头:', response.headers);
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({ error: '无法解析错误信息' }));
-                    console.error('生成图片失败，错误数据:', errorData);
-                    throw new Error(errorData.error || `服务器错误: ${response.status}`);
-                }
-
-                const data = await response.json();
-                console.log('生成图片成功，响应数据:', data);
-
-                if (data && data.imageUrl) {
-                    // 更新图片状态
-                    const filename = `ColoringPage_${prompt.replace(/[^a-z0-9]/gi, '_').substring(0, 20)}.png`;
-                    currentImageData = {
-                        url: data.imageUrl,
-                        prompt: prompt,
-                        filename: filename
-                    };
-
-                    // 更新UI显示
-                    mainImage.src = data.imageUrl;
-                    mainImage.alt = `线条画: ${prompt}`;
-                    mainImage.style.display = 'block';
-                    placeholderContent.style.display = 'none';
-                    downloadLink.style.display = 'block';
-
-                    // 生成配色方案
-                    await updateColorPalette(data.imageUrl);
-
-                    // 保存状态到localStorage
-                    saveCurrentState();
-
-                    // 在所有服务完成后更新用户积分（确保显示正确的总扣减）
-                    await authSystem.refreshUserInfo();
-
-                    console.log('图片生成完成，状态已更新');
-                } else {
-                    throw new Error('后端未返回有效的图片 URL');
-                }
-
-            } catch (error) {
-                console.error('调用后端 API 时出错:', error);
-
-                // 特殊处理401错误（认证失败）
-                if (error.message.includes('401') || error.message.includes('无效的登录令牌')) {
-                    console.log('认证失败，尝试重新获取用户信息...');
-                    // 尝试刷新用户信息，如果失败则要求重新登录
-                    try {
-                        await authSystem.refreshUserInfo();
-                        // 如果刷新成功，提示用户重试
-                        showMessage('error-message', '登录状态已更新，请重试生成', 'warning');
-                    } catch (refreshError) {
-                        // 如果刷新失败，要求重新登录
-                        showMessage('error-message', '登录已过期，请重新登录', 'error');
-                        authSystem.openModal('login-modal');
-                    }
-                } else if (error instanceof TypeError && error.message === 'Failed to fetch') {
-                    showMessage('error-message', '无法连接到后端服务，请确保后端正在运行且地址正确。', 'error');
-                } else {
-                    showMessage('error-message', `生成失败: ${error.message}`, 'error');
-                }
-                placeholderContent.style.display = 'flex';
-                mainImage.style.display = 'none';
-            } finally {
-                loadingIndicator.style.display = 'none';
-                mainImage.style.opacity = '1';
-                generateButton.disabled = false;
-                generateButton.innerHTML = '<i class="fas fa-magic"></i> 生成线条画';
-            }
-        }
-
         // 更新配色方案的函数
         async function updateColorPalette(imageUrl) {
             const colorSwatchesContainer = document.getElementById('color-swatches-container');
@@ -1192,7 +805,7 @@
             } catch (error) {
                 console.error('调用配色API时发生错误:', error);
                 if (error instanceof TypeError && error.message === 'Failed to fetch') {
-                    displayDefaultColors('无法连接到配色服务，使用默认配色');
+                    displayDefaultColors('无法连���到配色服务，使用默认配色');
                 } else {
                     displayDefaultColors(`配色生成失败: ${error.message}`);
                 }
@@ -1232,27 +845,6 @@
             saveCurrentState();
 
             console.log('显示默认配色:', message);
-        }
-
-        // 复制颜色到剪贴板
-        function copyColorToClipboard(color, element) {
-            navigator.clipboard.writeText(color).then(() => {
-                // 显示复制成功的视觉反馈
-                const originalTitle = element.title;
-                element.title = '已复制!';
-                element.style.transform = 'scale(1.1)';
-
-                setTimeout(() => {
-                    element.title = originalTitle;
-                    element.style.transform = 'scale(1)';
-                }, 1000);
-
-                console.log('颜色已复制到剪贴板:', color);
-            }).catch(err => {
-                console.error('复制失败:', err);
-                // 降级方案：显示颜色值
-                alert(`颜色代码: ${color}`);
-            });
         }
 
         // 下载当前图片函数
@@ -1310,7 +902,7 @@
                 console.log('使用备用方法下载完成');
             }
 
-            // 下载完成后，确保认证状态和页面状态保持不变
+            // 下载完成后，确���认证状态和页面状态保持不变
             setTimeout(() => {
                 // 检查认证状态是否被意外清除
                 if (!authSystem.getAuthToken() && currentAuthToken) {
@@ -1332,24 +924,6 @@
 
                 console.log('下载后状态检查完成');
             }, 500);
-        }
-
-        // 显示消息的辅助函数
-        function showMessage(elementId, message, type = 'info') {
-            const element = document.getElementById(elementId);
-            if (element) {
-                element.textContent = message;
-                element.className = `message ${type}`;
-                element.style.display = 'block';
-            }
-        }
-
-        // 隐藏消息的辅助函数
-        function hideMessage(elementId) {
-            const element = document.getElementById(elementId);
-            if (element) {
-                element.style.display = 'none';
-            }
         }
     </script>
 </body>

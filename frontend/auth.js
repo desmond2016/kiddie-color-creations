@@ -278,10 +278,56 @@ function closeUserDropdown() {
     document.getElementById('user-dropdown').style.display = 'none';
 }
 
+// 全局消息提示函数
+function showMessage(elementId, message, type = 'info') {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.textContent = message;
+        element.className = `message ${type}`;
+        element.style.display = 'block';
+
+        // 3秒后自动隐藏
+        setTimeout(() => {
+            hideMessage(elementId);
+        }, 3000);
+    } else {
+        // 备用方案：如果找不到特定元素，显示一个全局浮动消息
+        const container = document.getElementById('message-container') || createGlobalMessageContainer();
+        const messageElement = document.createElement('div');
+        messageElement.className = `alert alert-${type}`;
+        messageElement.textContent = message;
+        
+        container.appendChild(messageElement);
+
+        setTimeout(() => {
+            container.removeChild(messageElement);
+        }, 3000);
+    }
+}
+
+// 隐藏消息的辅助函数
+function hideMessage(elementId) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.style.display = 'none';
+    }
+}
+
+function createGlobalMessageContainer() {
+    let container = document.getElementById('message-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'message-container';
+        document.body.appendChild(container);
+    }
+    return container;
+}
+
 // 初始化
 function initAuth() {
     loadAuthData();
     updateUI();
+    createGlobalMessageContainer(); // 确保消息容器存在
 
     // 如果有token，验证其有效性
     if (authToken) {
