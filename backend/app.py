@@ -38,7 +38,11 @@ app.config['ADMIN_KEY'] = os.getenv('ADMIN_KEY', 'admin123')
 app.config['ADMIN_PASSWORD'] = os.getenv('ADMIN_PASSWORD', 'admin123')
 
 # 初始化扩展
-CORS(app, origins='*')
+CORS(app, origins=[
+    "https://kiddie-color-creations.pages.dev",
+    "http://localhost:5500",
+    "http://127.0.0.1:5500"
+], supports_credentials=True)
 db.init_app(app)
 jwt = JWTManager(app)
 
