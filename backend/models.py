@@ -240,3 +240,36 @@ class UserSession(db.Model):
             'expires_at': self.expires_at.isoformat() if self.expires_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
+
+class Setting(db.Model):
+    """系统设置表"""
+    __tablename__ = 'settings'
+    
+    key = db.Column(db.String(50), primary_key=True)
+    value = db.Column(db.String(200), nullable=False)
+
+    @staticmethod
+    def set_password(password_key, password):
+        """设置密码（加密存储）"""
+        password_bytes = password.encode('utf-8')
+        salt = bcrypt.gensalt()
+        hashed_password = bcrypt.hashpw(password_bytes, salt).decode('utf-8')
+        
+        setting = Setting.query.get(password_key)
+        if setting:
+            setting.value = hashed_password
+        else:
+            setting = Setting(key=password_key, value=hashed_password)
+            db.session.add(setting)
+        db.session.commit()
+
+    @staticmethod
+    def check_password(password_key, password):
+        """验证密码"""
+        setting = Setting.query.get(password_key)
+        if not setting:
+            return False
+            
+        password_bytes = password.encode('utf-8')
+        hash_bytes = setting.value.encode('utf-8')
+        return bcrypt.checkpw(password_bytes, hash_bytes)
