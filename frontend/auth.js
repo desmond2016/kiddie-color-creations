@@ -28,13 +28,9 @@ async function apiRequest(endpoint, options = {}) {
         headers
     };
 
-    console.log('API请求:', url, finalOptions); // 调试日志
-
     try {
         const response = await fetch(url, finalOptions);
         const data = await response.json();
-
-        console.log('API响应:', response.status, data); // 调试日志
 
         if (!response.ok) {
             throw new Error(data.error || `HTTP ${response.status}`);
@@ -132,13 +128,7 @@ async function login(loginInput, password) {
             body: JSON.stringify({ login: loginInput, password })
         });
 
-        console.log('登录响应数据:', data);
-        console.log('保存token:', data.access_token);
-
         saveAuthData(data.access_token, data.user);
-
-        console.log('保存后的token:', authToken);
-        console.log('保存后的用户:', currentUser);
 
         updateUI();
         closeModal('auth-modal');
@@ -161,10 +151,6 @@ function logout() {
 // 兑换积分码
 async function redeemCode(code) {
     try {
-        console.log('开始兑换积分码:', code);
-        console.log('当前用户:', currentUser);
-        console.log('当前token:', authToken);
-
         const data = await apiRequest('/auth/redeem', {
             method: 'POST',
             body: JSON.stringify({ code })
@@ -189,10 +175,6 @@ async function redeemCode(code) {
 // 修改密码
 async function changePassword(currentPassword, newPassword, confirmPassword) {
     try {
-        console.log('开始修改密码');
-        console.log('当前用户:', currentUser);
-        console.log('当前token:', authToken);
-
         const data = await apiRequest('/auth/change-password', {
             method: 'POST',
             body: JSON.stringify({
@@ -230,6 +212,29 @@ async function loadTransactionHistory() {
     } catch (error) {
         document.getElementById('transaction-list').innerHTML = 
             `<div class="error">加载失败: ${error.message}</div>`;
+    }
+}
+
+// 刷新用户信息
+async function refreshUserInfo() {
+    try {
+        const data = await apiRequest('/auth/profile');
+        currentUser = data.user;
+        localStorage.setItem('currentUser', JSON.stringify(currentUser));
+        updateUI();
+        return currentUser;
+    } catch (error) {
+        console.error('刷新用户信息失败:', error);
+        throw error;
+    }
+}
+
+// 更新用户信息（用于接收从API返回的最新用户数据）
+function updateUserInfo(userData) {
+    if (userData) {
+        currentUser = userData;
+        localStorage.setItem('currentUser', JSON.stringify(currentUser));
+        updateUI();
     }
 }
 
@@ -313,80 +318,47 @@ function hideMessage(elementId) {
     }
 }
 
+// 创建全局消息容器
 function createGlobalMessageContainer() {
-    let container = document.getElementById('message-container');
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'message-container';
-        document.body.appendChild(container);
-    }
+    const container = document.createElement('div');
+    container.id = 'message-container';
+    container.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 10000;
+        max-width: 400px;
+    `;
+    document.body.appendChild(container);
     return container;
 }
 
-// 初始化
-function initAuth() {
-    loadAuthData();
-    updateUI();
-    createGlobalMessageContainer(); // 确保消息容器存在
-
-    // 如果有token，验证其有效性
-    if (authToken) {
-        apiRequest('/auth/profile')
-            .then(data => {
-                currentUser = data.user;
-                localStorage.setItem('currentUser', JSON.stringify(currentUser));
-                updateUI();
-            })
-            .catch(() => {
-                // Token无效，清除认证数据
-                clearAuthData();
-                updateUI();
-            });
-    }
-}
-
-// 全局函数，供HTML中的script使用
-window.initAuth = initAuth;
-window.showMessage = showMessage;
-window.hideMessage = hideMessage;
-
-// 刷新用户信息
-async function refreshUserInfo() {
-    if (!authToken) {
-        console.log('没有认证token，无法刷新用户信息');
-        return;
-    }
-
-    try {
-        console.log('正在刷新用户信息...');
-        const data = await apiRequest('/auth/profile');
-        currentUser = data.user;
-        localStorage.setItem('currentUser', JSON.stringify(currentUser));
-        updateUI();
-        console.log('用户信息刷新成功:', currentUser);
-    } catch (error) {
-        console.error('刷新用户信息失败:', error);
-        // 如果token无效，清除认证数据
-        if (error.message.includes('无效') || error.message.includes('过期')) {
-            clearAuthData();
-            updateUI();
-        }
-    }
-}
-
-// 导出函数供全局使用
-window.authSystem = {
-    register,
+// 全局认证系统对象
+const authSystem = {
+    getCurrentUser: () => currentUser,
+    getAuthToken: () => authToken,
+    updateUI,
     login,
+    register,
     logout,
     redeemCode,
     changePassword,
+    refreshUserInfo,
+    updateUserInfo,
     loadTransactionHistory,
     openModal,
     closeModal,
-    closeUserDropdown,
-    updateUI,
-    refreshUserInfo,
-    getCurrentUser: () => currentUser,
-    getAuthToken: () => authToken
+    closeUserDropdown
 };
+
+// 初始化认证系统
+function initAuth() {
+    loadAuthData();
+    updateUI();
+}
+
+// 导出到全局
+window.authSystem = authSystem;
+window.initAuth = initAuth;
+window.showMessage = showMessage;
+window.hideMessage = hideMessage;

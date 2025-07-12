@@ -624,7 +624,7 @@
                 // 检查积分余额（需要2积分：1积分生成图片 + 1积分生成配色）
                 const user = authSystem.getCurrentUser();
                 if (user.credits < 2) {
-                    showMessage('error-message', '积分余额不足，需要2积分（图片+配色），请先兑换积分', 'error');
+                    showMessage('error-message', `积分余额不足，需要2积分，当前余额${user.credits}积分。请先兑换积分！`, 'error');
                     return;
                 }
 
@@ -633,12 +633,25 @@
             });
         }
 
-        // 带认证的图片生成函数
+        // 带认证的图片生成函数 - 使用统一的创作生成API
         async function generateImageWithAuth() {
             const prompt = document.getElementById('prompt-input').value.trim();
 
+            // 改进的输入验证
             if (!prompt) {
                 showMessage('error-message', '请输入图片描述！', 'error');
+                document.getElementById('prompt-input').focus();
+                return;
+            }
+
+            if (prompt.length < 2) {
+                showMessage('error-message', '图片描述太短，请至少输入2个字符', 'error');
+                document.getElementById('prompt-input').focus();
+                return;
+            }
+
+            if (prompt.length > 200) {
+                showMessage('error-message', '图片描述太长，请限制在200字符以内', 'error');
                 document.getElementById('prompt-input').focus();
                 return;
             }
@@ -648,19 +661,23 @@
             const mainImage = document.getElementById('main-coloring-image');
             const generateButton = document.getElementById('generate-button');
             const errorMessage = document.getElementById('error-message');
+            const paletteLoadingIndicator = document.getElementById('palette-loading-indicator');
 
+            // 显示加载状态
             loadingIndicator.style.display = 'flex';
             placeholderContent.style.display = 'none';
             mainImage.style.opacity = '0.5';
             generateButton.disabled = true;
             generateButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 生成中...';
+            paletteLoadingIndicator.style.display = 'block';
             hideMessage('error-message');
 
             try {
-                console.log('开始生成图片，prompt:', prompt);
+                console.log('开始生成创作，prompt:', prompt);
                 console.log('使用token:', authSystem.getAuthToken());
 
-                const response = await fetch(CONFIG.API_BASE_URL + '/credits/generate-image', {
+                // 使用统一的创作生成API
+                const response = await fetch(CONFIG.API_BASE_URL + '/credits/generate-creation', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -669,37 +686,59 @@
                     body: JSON.stringify({ prompt: prompt })
                 });
 
-                console.log('生成图片响应状态:', response.status);
-                console.log('生成图片响应头:', response.headers);
+                console.log('生成创作响应状态:', response.status);
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({ error: '无法解析错误信息' }));
-                    console.error('生成图片失败，错误数据:', errorData);
-                    throw new Error(errorData.error || `服务器错误: ${response.status}`);
+                    console.error('生成创作失败，错误数据:', errorData);
+                    
+                    // 根据错误类型提供更具体的提示
+                    let errorMessage = errorData.error || `服务器错误: ${response.status}`;
+                    if (response.status === 400 && errorData.current_credits !== undefined) {
+                        errorMessage = `${errorData.error}。请点击右上角"兑换积分"获取更多积分。`;
+                    } else if (response.status === 401) {
+                        errorMessage = '登录已过期，请重新登录';
+                    } else if (response.status === 503) {
+                        errorMessage = '服务暂时不可用，请稍后重试';
+                    }
+                    
+                    throw new Error(errorMessage);
                 }
 
                 const data = await response.json();
-                console.log('生成图片成功，响应数据:', data);
+                console.log('生成创作成功，响应数据:', data);
 
-                if (data && data.imageUrl) {
+                if (data && data.imageUrl && data.colors) {
+                    // 更新图片显示
+                    currentImageData = {
+                        url: data.imageUrl,
+                        prompt: prompt,
+                        filename: `ColoringPage_${prompt.replace(/[^a-z0-9]/gi, '_').substring(0, 20)}.png`
+                    };
+
                     mainImage.src = data.imageUrl;
                     mainImage.alt = `线条画: ${prompt}`;
                     mainImage.style.display = 'block';
                     placeholderContent.style.display = 'none';
 
                     const downloadLink = document.getElementById('download-link');
-                    downloadLink.href = data.imageUrl;
                     downloadLink.style.display = 'block';
-                    const filename = `ColoringPage_${prompt.replace(/[^a-z0-9]/gi, '_').substring(0, 20)}.png`;
-                    downloadLink.download = filename;
 
-                    // 生成配色方案
-                    await updateColorPalette(prompt);
+                    // 更新配色方案
+                    currentColorPalette = data.colors;
+                    updateColorSwatches(data.colors);
 
-                    // 在所有服务完成后更新用户积分（确保显示正确的总扣减）
-                    await authSystem.refreshUserInfo();
+                    // 更新用户积分信息
+                    if (data.user) {
+                        authSystem.updateUserInfo(data.user);
+                    }
+
+                    // 保存状态
+                    saveCurrentState();
+
+                    console.log('创作生成完成，积分已扣减');
                 } else {
-                    throw new Error('后端未返回有效的图片 URL');
+                    throw new Error('后端未返回有效的创作数据');
                 }
 
             } catch (error) {
@@ -708,13 +747,10 @@
                 // 特殊处理401错误（认证失败）
                 if (error.message.includes('401') || error.message.includes('无效的登录令牌')) {
                     console.log('认证失败，尝试重新获取用户信息...');
-                    // 尝试刷新用户信息，如果失败则要求重新登录
                     try {
                         await authSystem.refreshUserInfo();
-                        // 如果刷新成功，提示用户重试
                         showMessage('error-message', '登录状态已更新，请重试生成', 'warning');
                     } catch (refreshError) {
-                        // 如果刷新失败，要求重新登录
                         showMessage('error-message', '登录已过期，请重新登录', 'error');
                         authSystem.openModal('auth-modal');
                     }
@@ -723,13 +759,35 @@
                 } else {
                     showMessage('error-message', `生成失败: ${error.message}`, 'error');
                 }
+                
                 placeholderContent.style.display = 'flex';
                 mainImage.style.display = 'none';
             } finally {
                 loadingIndicator.style.display = 'none';
+                paletteLoadingIndicator.style.display = 'none';
                 mainImage.style.opacity = '1';
                 generateButton.disabled = false;
                 generateButton.innerHTML = '<i class="fas fa-magic"></i> 生成线条画';
+            }
+        }
+
+        // 更新配色方案显示
+        function updateColorSwatches(colors) {
+            const colorSwatchesContainer = document.getElementById('color-swatches-container');
+            colorSwatchesContainer.innerHTML = '';
+
+            if (colors && Array.isArray(colors)) {
+                colors.forEach(color => {
+                    if (typeof color === 'string' && /^#[0-9A-F]{6}$/i.test(color)) {
+                        const swatch = document.createElement('span');
+                        swatch.className = 'swatch';
+                        swatch.style.backgroundColor = color;
+                        swatch.title = `点击复制: ${color}`;
+                        swatch.setAttribute('data-color', color);
+                        swatch.addEventListener('click', () => copyColorToClipboard(color, swatch));
+                        colorSwatchesContainer.appendChild(swatch);
+                    }
+                });
             }
         }
 

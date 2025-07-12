@@ -2,7 +2,7 @@ services:
   - type: web
     name: kiddie-color-creations-backend
     env: python
-    buildCommand: "pip install -r requirements.txt"
+    buildCommand: "pip install -r backend/requirements.txt && flask --app backend.app db upgrade"
     startCommand: "gunicorn --chdir backend app:app"
     envVars:
       - key: SECRET_KEY

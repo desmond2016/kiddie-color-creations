@@ -201,46 +201,6 @@ class CreditTransaction(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
-class UserSession(db.Model):
-    """用户会话表（可选，如果使用JWT可以不需要）"""
-    __tablename__ = 'user_sessions'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    session_token = db.Column(db.String(128), unique=True, nullable=False, index=True)
-    expires_at = db.Column(db.DateTime, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
-    
-    user = db.relationship('User', backref='sessions')
-    
-    @classmethod
-    def create_session(cls, user, expires_hours=24):
-        """创建新会话"""
-        session_token = secrets.token_urlsafe(64)
-        expires_at = datetime.now() + timedelta(hours=expires_hours)
-        
-        session = cls(
-            user_id=user.id,
-            session_token=session_token,
-            expires_at=expires_at
-        )
-        
-        return session
-    
-    def is_valid(self):
-        """检查会话是否有效"""
-        return datetime.now() < self.expires_at
-    
-    def to_dict(self):
-        """转换为字典格式"""
-        return {
-            'id': self.id,
-            'user_id': self.user_id,
-            'session_token': self.session_token,
-            'expires_at': self.expires_at.isoformat() if self.expires_at else None,
-            'created_at': self.created_at.isoformat() if self.created_at else None
-        }
-
 class Setting(db.Model):
     """系统设置表"""
     __tablename__ = 'settings'

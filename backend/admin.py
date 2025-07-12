@@ -5,8 +5,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from functools import wraps
 import traceback
-import random
-import string
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 
 from models import db, User, RedemptionCode, CreditTransaction, Setting
 
@@ -14,13 +13,15 @@ from models import db, User, RedemptionCode, CreditTransaction, Setting
 admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
 
 # --- 认证和装饰器 ---
-def admin_required(f):
-    """验证管理员权限的装饰器"""
+def admin_jwt_required(f):
+    """验证管理员JWT的装饰器"""
     @wraps(f)
+    @jwt_required()
     def decorated_function(*args, **kwargs):
-        admin_key = request.headers.get('X-Admin-Key')
-        if not admin_key or admin_key != current_app.config.get('ADMIN_KEY'):
-            return jsonify({"error": "无效的管理员权限"}), 403
+        # 检查JWT身份是否为管理员
+        identity = get_jwt_identity()
+        if identity != 'admin':
+            return jsonify({"error": "需要管理员权限"}), 403
         return f(*args, **kwargs)
     return decorated_function
 
@@ -39,17 +40,21 @@ def admin_login():
         if username != current_app.config.get('ADMIN_USERNAME') or not Setting.check_password('admin_password', password):
             return jsonify({"error": "用户名或密码错误"}), 401
 
+        # 创建管理员专用的JWT
+        expires = current_app.config['ADMIN_ACCESS_TOKEN_EXPIRES']
+        access_token = create_access_token(identity='admin', expires_delta=expires)
+        
         return jsonify({
             "success": True,
             "message": "管理员登录成功",
-            "admin_key": current_app.config.get('ADMIN_KEY')
+            "access_token": access_token
         }), 200
     except Exception as e:
         current_app.logger.error(f"管理员登录失败: {e}")
         return jsonify({"error": "登录失败"}), 500
 
 @admin_bp.route('/change-password', methods=['POST'])
-@admin_required
+@admin_jwt_required
 def admin_change_password():
     """管理员密码修改功能"""
     try:
@@ -74,7 +79,7 @@ def admin_change_password():
 
 # --- 用户管理 ---
 @admin_bp.route('/users', methods=['GET'])
-@admin_required
+@admin_jwt_required
 def get_users():
     """获取用户列表"""
     try:
@@ -107,7 +112,7 @@ def get_users():
         return jsonify({"error": "获取用户列表失败"}), 500
 
 @admin_bp.route('/users/<int:user_id>', methods=['GET'])
-@admin_required
+@admin_jwt_required
 def get_user_detail(user_id):
     """获取用户详细信息"""
     try:
@@ -127,7 +132,7 @@ def get_user_detail(user_id):
         return jsonify({"error": "获取用户详情失败"}), 500
 
 @admin_bp.route('/users/<int:user_id>/credits', methods=['POST'])
-@admin_required
+@admin_jwt_required
 def adjust_user_credits(user_id):
     """调整用户积分"""
     try:
@@ -152,7 +157,7 @@ def adjust_user_credits(user_id):
         return jsonify({'error': '调整积分失败'}), 500
 
 @admin_bp.route('/users/<int:user_id>/status', methods=['PUT'])
-@admin_required
+@admin_jwt_required
 def toggle_user_status(user_id):
     """切换用户状态（启用/禁用）"""
     try:
@@ -167,7 +172,7 @@ def toggle_user_status(user_id):
         return jsonify({'error': '操作失败'}), 500
 
 @admin_bp.route('/users/<int:user_id>/reset-password', methods=['POST'])
-@admin_required
+@admin_jwt_required
 def reset_user_password(user_id):
     """重置用户密码"""
     try:
@@ -188,7 +193,7 @@ def reset_user_password(user_id):
 
 # --- 兑换码管理 ---
 @admin_bp.route('/codes/generate', methods=['POST'])
-@admin_required
+@admin_jwt_required
 def generate_redemption_code():
     """生成��换码"""
     try:
@@ -211,7 +216,7 @@ def generate_redemption_code():
         return jsonify({'error': '生成兑换码失败'}), 500
 
 @admin_bp.route('/codes', methods=['GET'])
-@admin_required
+@admin_jwt_required
 def list_redemption_codes():
     """获取兑换码列表"""
     try:
@@ -234,7 +239,7 @@ def list_redemption_codes():
 
 # --- 统计数据 ---
 @admin_bp.route('/stats', methods=['GET'])
-@admin_required
+@admin_jwt_required
 def get_stats():
     """获取系统统计数据"""
     try:

@@ -182,25 +182,43 @@
         // --- Core API Request Function ---
         async function apiRequest(endpoint, options = {}) {
             const url = `${API_BASE_URL}${endpoint}`;
+            const token = localStorage.getItem('admin_token');
             const headers = {
                 'Content-Type': 'application/json',
-                'X-Admin-Key': localStorage.getItem('admin_key'),
                 ...options.headers,
             };
+
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
             try {
                 const response = await fetch(url, { ...options, headers });
+                
+                if (response.status === 401) {
+                    // Token过期或无效，强制登出
+                    logout();
+                    throw new Error('登录已过期，请重新登录');
+                }
+
                 const data = await response.json();
-                if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+                if (!response.ok) {
+                    throw new Error(data.error || `HTTP ${response.status}`);
+                }
                 return data;
             } catch (error) {
                 console.error(`API请求失败: ${endpoint}`, error);
+                // 如果是登录请求失败，则不在这里显示全局消息
+                if (endpoint !== '/api/admin/login') {
+                    showMessage('admin-message', error.message, 'error');
+                }
                 throw error;
             }
         }
 
         // --- Authentication ---
         function checkAdminLogin() {
-            if (localStorage.getItem('admin_key')) {
+            if (localStorage.getItem('admin_token')) {
                 showAdminMain();
             } else {
                 showAdminLogin();
@@ -221,11 +239,18 @@
 
         async function adminLogin(username, password) {
             try {
-                const data = await apiRequest('/api/admin/login', {
+                // 登录请求不发送旧的token
+                const data = await fetch(`${API_BASE_URL}/api/admin/login`, {
                     method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ username, password }),
-                });
-                localStorage.setItem('admin_key', data.admin_key);
+                }).then(res => res.json());
+
+                if (!data.access_token) {
+                    throw new Error(data.error || '登录失败');
+                }
+
+                localStorage.setItem('admin_token', data.access_token);
                 showAdminMain();
             } catch (error) {
                 showLoginMessage(error.message, 'error');
@@ -233,7 +258,7 @@
         }
 
         function logout() {
-            localStorage.removeItem('admin_key');
+            localStorage.removeItem('admin_token');
             showAdminLogin();
         }
 

@@ -4,6 +4,7 @@ from datetime import timedelta
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
+from flask_migrate import Migrate
 from dotenv import load_dotenv
 import traceback
 
@@ -17,15 +18,27 @@ load_dotenv()
 # --- Flask 应用设置 ---
 app = Flask(__name__)
 
+
 # --- 配置 ---
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
-app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key-change-in-production')
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=7)
+# 强制从环境变量加载，如果没有设置则抛出错误
+def get_env_variable(name):
+    try:
+        return os.environ[name]
+    except KeyError:
+        message = f"错误: 环境变量 {name} 未设置。"
+        raise Exception(message)
+
+app.config['SECRET_KEY'] = get_env_variable('SECRET_KEY')
+app.config['JWT_SECRET_KEY'] = get_env_variable('JWT_SECRET_KEY')
+app.config['ADMIN_PASSWORD'] = get_env_variable('ADMIN_PASSWORD') # 用于首次初始化
+
+# 为不同身份设置不同的JWT过期时间
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=7) # 普通用户
+app.config['ADMIN_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1) # 管理员
+
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///instance/kiddie_color_creations.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['ADMIN_USERNAME'] = os.getenv('ADMIN_USERNAME', 'admin')
-app.config['ADMIN_PASSWORD'] = os.getenv('ADMIN_PASSWORD', 'admin123') # 用于首次初始化
-app.config['ADMIN_KEY'] = os.getenv('ADMIN_KEY', 'admin123')
 
 # --- 初始化扩展 ---
 CORS(app, origins=[
@@ -35,6 +48,8 @@ CORS(app, origins=[
 ], supports_credentials=True)
 db.init_app(app)
 jwt = JWTManager(app)
+setup_jwt_error_handlers(jwt) # 注册自定义JWT错误处理器
+migrate = Migrate(app, db) # 初始化 Flask-Migrate
 
 # --- 注册蓝图 ---
 app.register_blueprint(auth_bp)
@@ -42,15 +57,18 @@ app.register_blueprint(credits_bp)
 app.register_blueprint(admin_bp)
 
 # --- 数据库和初始数据设置 ---
-def setup_database(current_app):
-    with current_app.app_context():
+# 注意: 数据库表的创建现在由 Flask-Migrate 处理
+# `flask db init` -> `flask db migrate` -> `flask db upgrade`
+# 初始数据（如管理员）可以在首次迁移后手动或通过脚本添加
+@app.cli.command("init-db-seed")
+def init_db_seed():
+    """在数据库��植入初始数据"""
+    with app.app_context():
         try:
-            db.create_all()
-            
             # 初始化管理员密码
             if not Setting.query.get('admin_password'):
                 print("初始化管理员密码...")
-                initial_password = current_app.config['ADMIN_PASSWORD']
+                initial_password = app.config['ADMIN_PASSWORD']
                 Setting.set_password('admin_password', initial_password)
                 print("管理员密码已初始化并存入数据库。")
 
@@ -62,17 +80,20 @@ def setup_database(current_app):
                 db.session.add(test_user)
                 db.session.commit()
                 print("测试数据创建成功")
-                
+            else:
+                print("数据库中已存在用户，跳过创建测试用户。")
+
         except Exception as e:
-            print(f"数据库初始化错误: {e}")
+            print(f"数据库植入初始数据时发生错误: {e}")
             traceback.print_exc()
 
-setup_database(app)
+# setup_database(app) # 旧的数据库设置函数，已被移除
 
 # --- 通用API路由 ---
 @app.route('/', methods=['GET'])
 def root():
     return jsonify({'message': 'Kiddie Color Creations API is running!', 'version': '1.0.0'}), 200
+
 
 @app.route('/api/health', methods=['GET'])
 def health_check():

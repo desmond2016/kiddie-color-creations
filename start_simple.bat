@@ -3,10 +3,14 @@ echo ========================================
 echo  Kiddie Color Creations Startup
 echo ========================================
 echo.
+echo IMPORTANT: Make sure you have a .env file in the 'backend' directory
+echo with all required environment variables set (e.g., SECRET_KEY, DATABASE_URL).
+echo.
 
 echo Starting backend server...
 cd backend
-start "Backend" cmd /k "venv\Scripts\python.exe app.py"
+set FLASK_APP=app.py
+start "Backend" cmd /k "venv\Scripts\flask.exe run --host=127.0.0.1 --port=5000"
 cd ..
 
 echo Waiting 3 seconds...
@@ -20,11 +24,11 @@ echo ========================================
 echo  Servers started!
 echo ========================================
 echo.
-echo Backend: http://127.0.0.1:5000
-echo Frontend: http://localhost:8080/index.html
-echo Admin: http://localhost:8080/admin.html
+echo Backend running at: http://127.0.0.1:5000
+echo Frontend running at: http://localhost:8080/index.html
+echo Admin Panel at:    http://localhost:8080/admin.html
 echo.
-echo Admin login: admin / admin123
+echo Please check your .env file for administrator credentials.
 echo.
-echo Press any key to exit...
+echo Press any key to exit this script window...
 pause >nul

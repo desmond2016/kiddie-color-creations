@@ -11,7 +11,7 @@ from flask_migrate import Migrate
 
 def init_database(app):
     """初始化数据库"""
-    from models import db, User, RedemptionCode, CreditTransaction, UserSession
+    from models import db, User, RedemptionCode, CreditTransaction
     
     # 配置数据库
     basedir = os.path.abspath(os.path.dirname(__file__))
