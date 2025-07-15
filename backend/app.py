@@ -20,17 +20,17 @@ app = Flask(__name__)
 
 
 # --- 配置 ---
-# 强制从环境变量加载，如果没有设置则抛出错误
-def get_env_variable(name):
-    try:
-        return os.environ[name]
-    except KeyError:
-        message = f"错误: 环境变量 {name} 未设置。"
+# 从环境变量加载，提供默认值
+def get_env_variable(name, default=None):
+    value = os.getenv(name, default)
+    if value is None:
+        message = f"错误: 环境变量 {name} 未设置且没有默认值。"
         raise Exception(message)
+    return value
 
-app.config['SECRET_KEY'] = get_env_variable('SECRET_KEY')
-app.config['JWT_SECRET_KEY'] = get_env_variable('JWT_SECRET_KEY')
-app.config['ADMIN_PASSWORD'] = get_env_variable('ADMIN_PASSWORD') # 用于首次初始化
+app.config['SECRET_KEY'] = get_env_variable('SECRET_KEY', 'dev-secret-key-change-in-production')
+app.config['JWT_SECRET_KEY'] = get_env_variable('JWT_SECRET_KEY', 'dev-jwt-secret-change-in-production')
+app.config['ADMIN_PASSWORD'] = get_env_variable('ADMIN_PASSWORD', 'admin123') # 用于首次初始化
 
 # 为不同身份设置不同的JWT过期时间
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=7) # 普通用户
