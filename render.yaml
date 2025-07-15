@@ -2,8 +2,8 @@ services:
   - type: web
     name: kiddie-color-creations-backend
     env: python
-    buildCommand: "pip install -r backend/requirements.txt && flask --app backend.app db upgrade"
-    startCommand: "gunicorn --chdir backend app:app"
+    buildCommand: "pip install -r backend/requirements.txt && cd backend && python -c 'from app import app; from flask_migrate import init, migrate, upgrade; from flask import current_app; import os; app.app_context().push(); init() if not os.path.exists(\"migrations\") else None; migrate(message=\"Initial migration\"); upgrade()'"
+    startCommand: "gunicorn app:app"
     envVars:
       - key: SECRET_KEY
         generateValue: true
