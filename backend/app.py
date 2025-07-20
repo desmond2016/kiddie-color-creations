@@ -36,7 +36,7 @@ app.config['ADMIN_PASSWORD'] = get_env_variable('ADMIN_PASSWORD', 'admin123') # 
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=7) # 普通用户
 app.config['ADMIN_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1) # 管理员
 
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///instance/kiddie_color_creations.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:////tmp/kiddie_color_creations.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['ADMIN_USERNAME'] = os.getenv('ADMIN_USERNAME', 'admin')
 
@@ -134,7 +134,65 @@ if __name__ == '__main__':
     print(f"管理员用户名: {app.config['ADMIN_USERNAME']}")
     print("="*50)
     
+    # 初始化数据库
+    with app.app_context():
+        try:
+            # 创建所有表
+            db.create_all()
+            print("数据库表创建成功")
+            
+            # 初始化管理员密码
+            if not Setting.query.get('admin_password'):
+                print("初始化管理员密码...")
+                initial_password = app.config['ADMIN_PASSWORD']
+                Setting.set_password('admin_password', initial_password)
+                print(f"管理员密码已初始化: {initial_password}")
+
+            # 创建测试用户（如果没有用户）
+            if User.query.count() == 0:
+                print("创建测试用户...")
+                test_user = User(username='testuser', email='test@example.com', credits=50)
+                test_user.set_password('123456')
+                db.session.add(test_user)
+                db.session.commit()
+                print("测试用户创建成功: testuser/123456")
+            else:
+                print("数据库中已存在用户，跳过创建测试用户。")
+
+        except Exception as e:
+            print(f"数据库初始化时发生错误: {e}")
+            traceback.print_exc()
+    
     flask_debug = os.getenv("FLASK_DEBUG", "False").lower() in ("true", "1", "t")
     port = int(os.getenv("PORT", 5000))
     app.run(debug=flask_debug, host='0.0.0.0', port=port)
+
+# 为生产环境（如Render）初始化数据库
+def initialize_database():
+    """在处理第一个请求之前初始化数据库"""
+    try:
+        # 创建所有表
+        db.create_all()
+        
+        # 初始化管理员密码
+        if not Setting.query.get('admin_password'):
+            initial_password = app.config['ADMIN_PASSWORD']
+            Setting.set_password('admin_password', initial_password)
+            print(f"管理员密码已初始化: {initial_password}")
+
+        # 创建测试用户（如果没有用户）
+        if User.query.count() == 0:
+            test_user = User(username='testuser', email='test@example.com', credits=50)
+            test_user.set_password('123456')
+            db.session.add(test_user)
+            db.session.commit()
+            print("测试用户创建成功: testuser/123456")
+
+    except Exception as e:
+        print(f"数据库初始化时发生错误: {e}")
+        traceback.print_exc()
+
+# 在应用启动时初始化数据库（适用于生产环境）
+with app.app_context():
+    initialize_database()
 
