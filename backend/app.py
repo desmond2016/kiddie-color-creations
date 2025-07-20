@@ -41,11 +41,16 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['ADMIN_USERNAME'] = os.getenv('ADMIN_USERNAME', 'admin')
 
 # --- 初始化扩展 ---
-CORS(app, origins=[
-    "https://kiddie-color-creations.pages.dev",
-    "http://localhost:5500", "http://127.0.0.1:5500",
-    "http://localhost:8000", "http://127.0.0.1:8000"
-], supports_credentials=True)
+CORS(app, 
+     origins=[
+         "https://kiddie-color-creations.pages.dev",
+         "http://localhost:5500", "http://127.0.0.1:5500",
+         "http://localhost:8000", "http://127.0.0.1:8000"
+     ], 
+     supports_credentials=True, 
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], 
+     allow_headers=['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
+     expose_headers=['Content-Type', 'Authorization'])
 db.init_app(app)
 jwt = JWTManager(app)
 setup_jwt_error_handlers(jwt) # 注册自定义JWT错误处理器
@@ -94,7 +99,6 @@ def init_db_seed():
 def root():
     return jsonify({'message': 'Kiddie Color Creations API is running!', 'version': '1.0.0'}), 200
 
-
 @app.route('/api/health', methods=['GET'])
 def health_check():
     try:
@@ -103,6 +107,25 @@ def health_check():
     except Exception:
         db_status = 'disconnected'
     return jsonify({'status': 'healthy', 'database': db_status}), 200
+
+# --- 错误处理 ---
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({'error': 'API端点不存在'}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    db.session.rollback()
+    return jsonify({'error': '服务器内部错误'}), 500
+
+@app.after_request
+def after_request(response):
+    # 添加CORS响应头
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response
 
 if __name__ == '__main__':
     print("="*50)

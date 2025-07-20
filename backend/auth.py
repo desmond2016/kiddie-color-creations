@@ -14,7 +14,7 @@ import re
 from models import db, User, CreditTransaction
 
 # 创建认证蓝图
-auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
+auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
 # 输入验证Schema
 class UserRegistrationSchema(Schema):

@@ -31,13 +31,35 @@ def admin_login():
     """管理员登录"""
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({"error": "无效的请求数据"}), 400
+            
         username = data.get('username')
         password = data.get('password')
 
         if not username or not password:
             return jsonify({"error": "用户名和密码都不能为空"}), 400
 
-        if username != current_app.config.get('ADMIN_USERNAME') or not Setting.check_password('admin_password', password):
+        # 检查管理员用户名
+        admin_username = current_app.config.get('ADMIN_USERNAME', 'admin')
+        if username != admin_username:
+            return jsonify({"error": "用户名或密码错误"}), 401
+            
+        # 检查密码（需要确保数据库中有admin_password设置）
+        try:
+            password_valid = Setting.check_password('admin_password', password)
+        except Exception as e:
+            current_app.logger.error(f"检查管理员密码时出错: {e}")
+            # 如果没有设置密码，使用配置中的默认密码
+            default_password = current_app.config.get('ADMIN_PASSWORD', 'admin123')
+            if password == default_password:
+                # 初始化密码到数据库
+                Setting.set_password('admin_password', password)
+                password_valid = True
+            else:
+                password_valid = False
+                
+        if not password_valid:
             return jsonify({"error": "用户名或密码错误"}), 401
 
         # 创建管理员专用的JWT
@@ -51,7 +73,8 @@ def admin_login():
         }), 200
     except Exception as e:
         current_app.logger.error(f"管理员登录失败: {e}")
-        return jsonify({"error": "登录失败"}), 500
+        traceback.print_exc()
+        return jsonify({"error": f"登录失败: {str(e)}"}), 500
 
 @admin_bp.route('/change-password', methods=['POST'])
 @admin_jwt_required
