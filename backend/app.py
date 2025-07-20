@@ -108,6 +108,17 @@ def health_check():
         db_status = 'disconnected'
     return jsonify({'status': 'healthy', 'database': db_status}), 200
 
+@app.route('/api/config-check', methods=['GET'])
+def config_check():
+    """检查关键配置项（调试用）"""
+    config_status = {
+        'IMAGE_API_ENDPOINT': 'configured' if os.getenv('IMAGE_API_ENDPOINT') else 'missing',
+        'IMAGE_API_KEY': 'configured' if os.getenv('IMAGE_API_KEY') else 'missing',
+        'DATABASE_URL': 'configured' if os.getenv('DATABASE_URL') else 'missing',
+        'SECRET_KEY': 'configured' if os.getenv('SECRET_KEY') else 'missing',
+    }
+    return jsonify(config_status), 200
+
 # --- 错误处理 ---
 @app.errorhandler(404)
 def not_found(error):
