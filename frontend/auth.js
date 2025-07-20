@@ -103,7 +103,7 @@ function updateUI() {
 // 用户注册
 async function register(username, email, password) {
     try {
-        const data = await apiRequest('/auth/register', {
+        const data = await apiRequest('/api/auth/register', {
             method: 'POST',
             body: JSON.stringify({ username, email, password })
         });
@@ -123,7 +123,7 @@ async function register(username, email, password) {
 // 用户登录
 async function login(loginInput, password) {
     try {
-        const data = await apiRequest('/auth/login', {
+        const data = await apiRequest('/api/auth/login', {
             method: 'POST',
             body: JSON.stringify({ login: loginInput, password })
         });
@@ -151,7 +151,7 @@ function logout() {
 // 兑换积分码
 async function redeemCode(code) {
     try {
-        const data = await apiRequest('/auth/redeem', {
+        const data = await apiRequest('/api/auth/redeem', {
             method: 'POST',
             body: JSON.stringify({ code })
         });
@@ -175,7 +175,7 @@ async function redeemCode(code) {
 // 修改密码
 async function changePassword(currentPassword, newPassword, confirmPassword) {
     try {
-        const data = await apiRequest('/auth/change-password', {
+        const data = await apiRequest('/api/auth/change-password', {
             method: 'POST',
             body: JSON.stringify({
                 current_password: currentPassword,
@@ -207,7 +207,7 @@ async function changePassword(currentPassword, newPassword, confirmPassword) {
 // 获取交易记录
 async function loadTransactionHistory() {
     try {
-        const data = await apiRequest('/auth/transactions');
+        const data = await apiRequest('/api/auth/transactions');
         displayTransactionHistory(data.transactions);
     } catch (error) {
         document.getElementById('transaction-list').innerHTML = 
@@ -218,7 +218,7 @@ async function loadTransactionHistory() {
 // 刷新用户信息
 async function refreshUserInfo() {
     try {
-        const data = await apiRequest('/auth/profile');
+        const data = await apiRequest('/api/auth/profile');
         currentUser = data.user;
         localStorage.setItem('currentUser', JSON.stringify(currentUser));
         updateUI();

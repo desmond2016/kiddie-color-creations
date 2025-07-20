@@ -13,7 +13,7 @@ from models import db, User
 from auth import auth_required
 
 # --- 蓝图和配置 ---
-credits_bp = Blueprint('credits', __name__, url_prefix='/api/credits')
+credits_bp = Blueprint('credits', __name__, url_prefix='/credits')
 CREDIT_COSTS = {
     'generate_image': 1,
     'generate_colors': 1,
