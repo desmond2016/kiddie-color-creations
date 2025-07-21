@@ -138,15 +138,19 @@ def generate_placeholder_svg(prompt):
     safe_prompt = prompt.replace('<', '&lt;').replace('>', '&gt;').replace('&', '&amp;')[:30]
     svg_content = f'''<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
         <rect width="400" height="400" fill="white" stroke="black" stroke-width="2"/>
-        <circle cx="200" cy="150" r="50" fill="none" stroke="black" stroke-width="3"/>
-        <text x="200" y="250" text-anchor="middle" font-family="Arial" font-size="16" fill="black">
-            涂色画: {safe_prompt}
+        <circle cx="200" cy="120" r="40" fill="none" stroke="black" stroke-width="3"/>
+        <rect x="160" y="180" width="80" height="60" fill="none" stroke="black" stroke-width="3"/>
+        <text x="200" y="260" text-anchor="middle" font-family="Arial" font-size="14" fill="black">
+            线条画: {safe_prompt}
         </text>
-        <text x="200" y="280" text-anchor="middle" font-family="Arial" font-size="12" fill="gray">
-            (示例图片 - 请配置API密钥获取真实图片)
+        <text x="200" y="280" text-anchor="middle" font-family="Arial" font-size="11" fill="gray">
+            （示例图片 - API服务暂时不可用）
         </text>
-        <text x="200" y="320" text-anchor="middle" font-family="Arial" font-size="10" fill="gray">
-            这是一个占位符，请联系管理员配置图片生成服务
+        <text x="200" y="300" text-anchor="middle" font-family="Arial" font-size="10" fill="gray">
+            您已成功提交请求，请联系管理员检查API配置
+        </text>
+        <text x="200" y="320" text-anchor="middle" font-family="Arial" font-size="10" fill="blue">
+            如果多次出现此问题，请刷新页面后重试
         </text>
     </svg>'''
     return base64.b64encode(svg_content.encode('utf-8')).decode('utf-8')
@@ -191,11 +195,9 @@ def generate_creation(current_user):
             current_app.logger.warning("IMAGE_API_KEY 未配置，使用占位符图片")
             image_url = f"data:image/svg+xml;base64,{generate_placeholder_svg(prompt)}"
         else:
-            # 设置headers - 根据你的示例调整
+            # 设置headers - 根据gptgod.online API要求调整
             headers = {"Content-Type": "application/json"}
-            # 只有在API key存在时才添加Authorization
-            if api_key:
-                headers["Authorization"] = f"Bearer {api_key}"
+            # gptgod.online不需要Authorization header，API key通过其他方式验证
             
             # 检查API端点类型并使用相应的payload格式
             if "chat/completions" in api_endpoint:
@@ -234,6 +236,7 @@ def generate_creation(current_user):
             
             try:
                 response = requests.post(api_endpoint, headers=headers, json=payload, timeout=30)
+                current_app.logger.info(f"API响应状态码: {response.status_code}")
                 response.raise_for_status()
                 
                 # 处理stream响应
@@ -312,27 +315,15 @@ def generate_creation(current_user):
                                 current_app.logger.info(f"从data[0].url获取到图片: {image_url}")
                 
                 if not image_url:
-                    current_app.logger.warning("API未返回图片URL，服务调用失败")
-                    return jsonify({
-                        'error': '图片生成失败，请稍后重试',
-                        'current_credits': current_user.credits,
-                        'required_credits': total_cost
-                    }), 500
+                    current_app.logger.warning("API未返回图片URL，使用占位符图片")
+                    image_url = f"data:image/svg+xml;base64,{generate_placeholder_svg(prompt)}"
                     
             except requests.exceptions.Timeout:
-                current_app.logger.error("API请求超时")
-                return jsonify({
-                    'error': '图片生成超时，请稍后重试',
-                    'current_credits': current_user.credits,
-                    'required_credits': total_cost
-                }), 504
+                current_app.logger.error("API请求超时，使用占位符图片")
+                image_url = f"data:image/svg+xml;base64,{generate_placeholder_svg(prompt)}"
             except requests.exceptions.RequestException as e:
-                current_app.logger.error(f"API请求失败: {e}")
-                return jsonify({
-                    'error': '图片生成服务暂时不可用，请稍后重试',
-                    'current_credits': current_user.credits,
-                    'required_credits': total_cost
-                }), 503
+                current_app.logger.error(f"API请求失败: {e}，使用占位符图片")
+                image_url = f"data:image/svg+xml;base64,{generate_placeholder_svg(prompt)}"
 
         # --- 2. 配色方案生成逻辑 ---
         color_palettes = [
@@ -342,16 +333,39 @@ def generate_creation(current_user):
         colors = random.choice(color_palettes)
 
         # --- 3. 积分扣除 ---
-        description = f"生成创作: {prompt[:50]}"
-        current_user.consume_credits(total_cost, description)
-        db.session.commit()
-        current_app.logger.info(f"用户 {current_user.username} 成功消费 {total_cost} 积分。")
+        # 只有在成功获取到有效图片URL时才扣除积分
+        if image_url and not image_url.startswith("data:image/svg+xml;base64,"):
+            # 真实图片生成成功，扣除积分
+            description = f"生成创作: {prompt[:50]}"
+            current_user.consume_credits(total_cost, description)
+            db.session.commit()
+            current_app.logger.info(f"用户 {current_user.username} 成功消费 {total_cost} 积分。")
+        else:
+            # 如果是占位符图片，只扣1积分（作为尝试费用）
+            try_cost = 1
+            if current_user.credits >= try_cost:
+                description = f"图片生成尝试: {prompt[:50]}"
+                current_user.consume_credits(try_cost, description)
+                db.session.commit()
+                current_app.logger.info(f"用户 {current_user.username} 图片生成失败，扣除尝试费用 {try_cost} 积分。")
+            # 使用免费的默认配色方案
+            colors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7"]
 
-        return jsonify({
-            "imageUrl": image_url,
-            "colors": colors,
-            "user": current_user.to_dict() # 返回更新后的用户信息
-        }), 200
+        # 添加积分料用信息提示
+        if image_url.startswith("data:image/svg+xml;base64,"):
+            # 占位符图片情况下的特殊返回
+            return jsonify({
+                "imageUrl": image_url,
+                "colors": colors,
+                "user": current_user.to_dict(),
+                "message": "图片生成服务暂时不可用，已生成占位符图片，请联系管理员"
+            }), 200
+        else:
+            return jsonify({
+                "imageUrl": image_url,
+                "colors": colors,
+                "user": current_user.to_dict()
+            }), 200
 
     except requests.exceptions.RequestException as e:
         db.session.rollback()

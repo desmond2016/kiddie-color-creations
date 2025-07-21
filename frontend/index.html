@@ -667,6 +667,7 @@
             loadingIndicator.style.display = 'flex';
             placeholderContent.style.display = 'none';
             mainImage.style.opacity = '0.5';
+            mainImage.style.display = 'none'; // 隐藏旧图片
             generateButton.disabled = true;
             generateButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 生成中...';
             paletteLoadingIndicator.style.display = 'block';
@@ -718,11 +719,35 @@
 
                     mainImage.src = data.imageUrl;
                     mainImage.alt = `线条画: ${prompt}`;
-                    mainImage.style.display = 'block';
-                    placeholderContent.style.display = 'none';
-
-                    const downloadLink = document.getElementById('download-link');
-                    downloadLink.style.display = 'block';
+                    
+                    // 添加图片加载错误处理
+                    mainImage.onload = function() {
+                        console.log('图片加载成功');
+                        mainImage.style.display = 'block';
+                        placeholderContent.style.display = 'none';
+                        downloadLink.style.display = 'block';
+                    };
+                    
+                    mainImage.onerror = function() {
+                        console.error('图片加载失败:', data.imageUrl);
+                        // 图片加载失败时显示错误信息
+                        showMessage('error-message', '图片加载失败，请稍后重试', 'error');
+                        placeholderContent.style.display = 'flex';
+                        mainImage.style.display = 'none';
+                        downloadLink.style.display = 'none';
+                    };
+                    
+                    // 如果是SVG占位符，直接显示
+                    if (data.imageUrl.startsWith('data:image/svg+xml')) {
+                        mainImage.style.display = 'block';
+                        placeholderContent.style.display = 'none';
+                        downloadLink.style.display = 'block';
+                        
+                        // 如果有服务器消息，显示给用户
+                        if (data.message) {
+                            showMessage('error-message', data.message, 'warning');
+                        }
+                    }
 
                     // 更新配色方案
                     currentColorPalette = data.colors;
@@ -762,13 +787,13 @@
                 
                 placeholderContent.style.display = 'flex';
                 mainImage.style.display = 'none';
-            } finally {
-                loadingIndicator.style.display = 'none';
-                paletteLoadingIndicator.style.display = 'none';
-                mainImage.style.opacity = '1';
-                generateButton.disabled = false;
-                generateButton.innerHTML = '<i class="fas fa-magic"></i> 生成线条画';
-            }
+                } finally {
+                    loadingIndicator.style.display = 'none';
+                    paletteLoadingIndicator.style.display = 'none';
+                    mainImage.style.opacity = '1';
+                    generateButton.disabled = false;
+                    generateButton.innerHTML = '<i class="fas fa-magic"></i> 生成线条画';
+                }
         }
 
         // 更新配色方案显示
