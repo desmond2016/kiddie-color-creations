@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-积分管理和核心服务API - 最终增强版
+积分管理和核心服务API - 修复版URL处理
 """
 from flask import Blueprint, request, jsonify, current_app
 import os
@@ -11,11 +11,9 @@ import base64
 import re
 import urllib.parse
 from functools import wraps
-import json
 
 from models import db, User
 from auth import auth_required
-from image_proxy import get_proxy_url
 
 # --- 蓝图和配置 ---
 credits_bp = Blueprint('credits', __name__, url_prefix='/credits')
@@ -156,6 +154,40 @@ def extract_image_url_from_stream(content):
         current_app.logger.error(f"提取图片URL时发生异常: {e}")
         return None
 
+def generate_placeholder_svg(prompt):
+    """生成占位符SVG图片"""
+    safe_prompt = prompt[:20] + "..." if len(prompt) > 20 else prompt
+    safe_prompt = safe_prompt.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    
+    svg_content = f'''<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
+        <rect width="400" height="400" fill="white" stroke="black" stroke-width="2"/>
+        <circle cx="200" cy="120" r="40" fill="none" stroke="black" stroke-width="3"/>
+        <rect x="160" y="180" width="80" height="60" fill="none" stroke="black" stroke-width="3"/>
+        <text x="200" y="260" text-anchor="middle" font-family="Arial" font-size="14" fill="black">
+            线条画: {safe_prompt}
+        </text>
+        <text x="200" y="280" text-anchor="middle" font-family="Arial" font-size="11" fill="gray">
+            （示例图片）
+        </text>
+        <text x="200" y="300" text-anchor="middle" font-family="Arial" font-size="10" fill="blue">
+            请重试或联系管理员
+        </text>
+    </svg>'''
+    return base64.b64encode(svg_content.encode('utf-8')).decode('utf-8')
+
+# --- 修复版URL处理 ---
+def get_safe_image_url(original_url):
+    """获取安全的图片URL - 修复版"""
+    if not original_url:
+        return None
+    
+    # 如果是本地URL或数据URL，直接返回
+    if original_url.startswith('data:') or original_url.startswith('/'):
+        return original_url
+    
+    # 直接返回原始URL，避免代理问题
+    return original_url
+
 # --- API 路由 ---
 @credits_bp.route('/generate-creation', methods=['POST'])
 @auth_required
@@ -228,10 +260,8 @@ def generate_creation(current_user):
                 "note": "使用占位符图片"
             }), 200
         
-        # 使用代理URL
-        proxy_url = get_proxy_url(image_url)
-        if proxy_url:
-            image_url = proxy_url
+        # 直接返回原始URL，避免代理问题
+        safe_url = get_safe_image_url(image_url)
 
         # 成功获取图片，扣除积分
         description = f"生成创作: {prompt[:50]}"
@@ -247,7 +277,7 @@ def generate_creation(current_user):
         ])
 
         return jsonify({
-            "imageUrl": image_url,
+            "imageUrl": safe_url,
             "colors": colors,
             "user": current_user.to_dict()
         }), 200
