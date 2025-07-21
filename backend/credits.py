@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-积分管理和核心服务API - 基于GPT-4O Image VIP API + 图片代理
+积分管理和核心服务API - 最终增强版
 """
 from flask import Blueprint, request, jsonify, current_app
 import os
@@ -15,7 +15,7 @@ import json
 
 from models import db, User
 from auth import auth_required
-from image_proxy import get_proxy_url, is_url_accessible
+from image_proxy import get_proxy_url
 
 # --- 蓝图和配置 ---
 credits_bp = Blueprint('credits', __name__, url_prefix='/credits')
@@ -44,8 +44,7 @@ def require_credits(service_type):
             try:
                 _, amount = check_credits_and_consume(current_user, service_type)
                 
-                result = f(current_user, *args, **kwargs) # 执行原始路由函数
-
+                result = f(current_user, *args, **kwargs)
                 response, status_code = result
                 if 200 <= status_code < 300:
                     db.session.commit()
@@ -66,162 +65,105 @@ def require_credits(service_type):
         return wrapper
     return decorator
 
-# --- API 路由 ---
-@credits_bp.route('/generate-image', methods=['POST'])
-@require_credits('generate_image')
-def generate_image_with_credits(current_user):
-    """生成图片API（带认证和积分扣减）"""
-    data = request.get_json()
-    prompt = data.get('prompt', '').strip()
-    if not prompt:
-        return jsonify({"error": "Prompt不能为空"}), 400
-
-    try:
-        # 从环境变量中获取 API 配置
-        api_endpoint = os.getenv("IMAGE_API_ENDPOINT", "https://api.gptgod.online/v1/chat/completions")
-        api_key = os.getenv("IMAGE_API_KEY")
-
-        if not api_key:
-            current_app.logger.error("图片生成API密钥未配置。")
-            return jsonify({"error": "图片生成服务当前不可用"}), 500
-
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
-        }
-        
-        # 基于GPT-4O Image VIP API的格式构建请求
-        payload = {
-            "stream": True,
-            "model": "gpt-4o-image-vip",
-            "messages": [
-                {
-                    "role": "user", 
-                    "content": f"画一个简单的儿童涂色线条画：{prompt}。要求：黑白线条，无填充色彩，清晰轮廓，适合儿童涂色，白色背景"
-                }
-            ]
-        }
-
-        # 发起对外部API的请求
-        response = requests.post(api_endpoint, headers=headers, json=payload, timeout=30)
-        response.raise_for_status()
-
-        # 解析流式响应并提取图片URL
-        image_url = extract_image_url_from_stream(response.text)
-        
-        if not image_url:
-            current_app.logger.warning("API未返回有效图片URL，使用占位符")
-            image_url = f"data:image/svg+xml;base64,{generate_placeholder_svg(prompt)}"
-        else:
-            # 使用代理URL解决CORS问题
-            proxy_url = get_proxy_url(image_url)
-            if proxy_url:
-                image_url = proxy_url
-
-        return jsonify({"imageUrl": image_url, "prompt": prompt}), 200
-    
-    except requests.exceptions.Timeout:
-        current_app.logger.error("API请求超时")
-        return jsonify({"error": "图片生成超时，请稍后重试"}), 504
-    except requests.exceptions.RequestException as e:
-        current_app.logger.error(f"请求图片生成API时出错: {e}")
-        return jsonify({"error": "图片生成服务暂时无法连接"}), 503
-    except Exception as e:
-        current_app.logger.error(f"图片生成过程中发生未知错误: {e}")
-        traceback.print_exc()
-        return jsonify({"error": "图片生成失败"}), 500
-
+# --- 增强版URL提取 ---
 def extract_image_url_from_stream(content):
-    """从流式响应中提取图片URL"""
+    """增强版：从流式响应中提取图片URL"""
     if not content:
+        current_app.logger.warning("API响应内容为空")
         return None
     
     try:
-        # 查找图片URL
-        url_pattern = r'https?://[^\s<>"\'\[\]{}\\|^`\n\r]+'
-        urls = re.findall(url_pattern, content)
+        current_app.logger.info(f"开始解析API响应内容，长度: {len(content)}")
         
-        if urls:
-            # 优先选择图片相关的URL
-            for url in urls:
-                # URL解码处理
-                try:
-                    decoded_url = urllib.parse.unquote(url)
-                    
-                    # 检查是否是图片URL
-                    if any(keyword in decoded_url.lower() for keyword in ['.jpg', '.jpeg', '.png', '.gif', '.webp', 'image', 'openai.com', 'videos.openai.com']):
-                        return decoded_url
-                except Exception:
-                    continue
-            
-            # 如果没有找到明确的图片URL，返回第一个URL
+        # 方法1: 直接查找图片URL
+        url_patterns = [
+            r'https?://[^\s<>"\'\[\]{}\\|^`\n\r]+\.(?:jpg|jpeg|png|gif|webp)',
+            r'https?://[^\s<>"\'\[\]{}\\|^`\n\r]*openai\.com[^\s<>"\'\[\]{}\\|^`\n\r]+',
+            r'https?://[^\s<>"\'\[\]{}\\|^`\n\r]*videos\.openai\.com[^\s<>"\'\[\]{}\\|^`\n\r]+',
+        ]
+        
+        for pattern in url_patterns:
+            urls = re.findall(pattern, content, re.IGNORECASE)
             if urls:
-                try:
-                    return urllib.parse.unquote(urls[0])
-                except Exception:
-                    return urls[0]
+                for url in urls:
+                    try:
+                        decoded_url = urllib.parse.unquote(url)
+                        if decoded_url.startswith('http') and len(decoded_url) > 20:
+                            current_app.logger.info(f"找到图片URL: {decoded_url}")
+                            return decoded_url
+                    except Exception as e:
+                        current_app.logger.warning(f"URL解码失败: {e}")
+                        continue
         
-        # 尝试解析JSON数据块
+        # 方法2: 解析JSON格式的响应
         lines = content.split('\n')
         for line in lines:
-            if line.startswith('data: ') and line.strip() != 'data: [DONE]':
+            line = line.strip()
+            if line.startswith('data: ') and line != 'data: [DONE]':
                 try:
-                    json_str = line[6:]  # 移除 'data: ' 前缀
+                    json_str = line[6:]
                     chunk_data = json.loads(json_str)
+                    
                     if 'choices' in chunk_data and len(chunk_data['choices']) > 0:
                         choice = chunk_data['choices'][0]
                         if 'delta' in choice and 'content' in choice['delta']:
-                            chunk_content = choice['delta']['content']
-                            chunk_urls = re.findall(url_pattern, chunk_content)
-                            if chunk_urls:
-                                try:
-                                    return urllib.parse.unquote(chunk_urls[0])
-                                except Exception:
-                                    return chunk_urls[0]
+                            content_text = choice['delta']['content']
+                            if content_text:
+                                for pattern in url_patterns:
+                                    urls = re.findall(pattern, content_text, re.IGNORECASE)
+                                    if urls:
+                                        decoded_url = urllib.parse.unquote(urls[0])
+                                        current_app.logger.info(f"从JSON内容中找到图片URL: {decoded_url}")
+                                        return decoded_url
+                                            
                 except (json.JSONDecodeError, KeyError, IndexError):
                     continue
         
+        # 方法3: 查找所有URL并评分
+        all_url_pattern = r'https?://[^\s<>"\'\[\]{}\\|^`\n\r]+'
+        all_urls = re.findall(all_url_pattern, content)
+        
+        priority_keywords = ['image', 'png', 'jpg', 'jpeg', 'openai', 'cdn', 'assets']
+        scored_urls = []
+        
+        for url in all_urls:
+            try:
+                decoded_url = urllib.parse.unquote(url)
+                score = 0
+                
+                for keyword in priority_keywords:
+                    if keyword in decoded_url.lower():
+                        score += 10
+                
+                if any(ext in decoded_url.lower() for ext in ['.png', '.jpg', '.jpeg', '.gif', '.webp']):
+                    score += 20
+                
+                scored_urls.append((score, decoded_url))
+                
+            except Exception:
+                continue
+        
+        if scored_urls:
+            scored_urls.sort(key=lambda x: x[0], reverse=True)
+            best_url = scored_urls[0][1]
+            current_app.logger.info(f"选择最高分的图片URL: {best_url}")
+            return best_url
+        
+        current_app.logger.warning("未找到任何有效的图片URL")
         return None
         
     except Exception as e:
-        current_app.logger.error(f"提取图片URL失败: {e}")
+        current_app.logger.error(f"提取图片URL时发生异常: {e}")
         return None
 
-def generate_placeholder_svg(prompt):
-    """生成占位符SVG图片"""
-    # 确保prompt是安全的字符串
-    safe_prompt = prompt[:20] + "..." if len(prompt) > 20 else prompt
-    # 转义特殊字符以防止XSS
-    safe_prompt = safe_prompt.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-    
-    svg_content = f'''<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
-        <rect width="400" height="400" fill="white" stroke="black" stroke-width="2"/>
-        <circle cx="200" cy="120" r="40" fill="none" stroke="black" stroke-width="3"/>
-        <rect x="160" y="180" width="80" height="60" fill="none" stroke="black" stroke-width="3"/>
-        <text x="200" y="260" text-anchor="middle" font-family="Arial" font-size="14" fill="black">
-            线条画: {safe_prompt}
-        </text>
-        <text x="200" y="280" text-anchor="middle" font-family="Arial" font-size="11" fill="gray">
-            （示例图片 - API服务暂时不可用）
-        </text>
-        <text x="200" y="300" text-anchor="middle" font-family="Arial" font-size="10" fill="gray">
-            您已成功提交请求，请联系管理员检查API配置
-        </text>
-        <text x="200" y="320" text-anchor="middle" font-family="Arial" font-size="10" fill="blue">
-            如果多次出现此问题，请刷新页面后重试
-        </text>
-    </svg>'''
-    return base64.b64encode(svg_content.encode('utf-8')).decode('utf-8')
-
-# --- 新的统一生成端点 ---
+# --- API 路由 ---
 @credits_bp.route('/generate-creation', methods=['POST'])
 @auth_required
 def generate_creation(current_user):
-    """原子化地生成图片和配色方案，只有成功时才扣除积分"""
+    """原子化地生成图片和配色方案"""
     data = request.get_json()
     prompt = data.get('prompt', '').strip()
     
-    # 改进的输入验证
     if not prompt:
         return jsonify({"error": "请输入图片描述"}), 400
     
@@ -231,7 +173,6 @@ def generate_creation(current_user):
     if len(prompt) < 2:
         return jsonify({"error": "图片描述太短，请至少输入2个字符"}), 400
 
-    # 检查总积分
     total_cost = CREDIT_COSTS.get('generate_image', 1) + CREDIT_COSTS.get('generate_colors', 1)
     if current_user.credits < total_cost:
         return jsonify({
@@ -241,25 +182,21 @@ def generate_creation(current_user):
         }), 400
 
     try:
-        # --- 1. 图片生成逻辑 ---
         api_endpoint = os.getenv("IMAGE_API_ENDPOINT", "https://api.gptgod.online/v1/chat/completions")
         api_key = os.getenv("IMAGE_API_KEY")
         
         if not api_key:
-            current_app.logger.warning("IMAGE_API_KEY 未配置")
             return jsonify({
                 'error': '图片生成服务未配置，请联系管理员',
                 'current_credits': current_user.credits,
                 'required_credits': total_cost
             }), 500
             
-        # 设置headers - 使用 IMAGE_API_KEY 进行身份验证
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}"
         }
         
-        # 基于GPT-4O Image VIP API的格式构建请求
         payload = {
             "stream": True,
             "model": "gpt-4o-image-vip",
@@ -271,89 +208,63 @@ def generate_creation(current_user):
             ]
         }
         
-        current_app.logger.info(f"使用payload: {payload}")
+        response = requests.post(api_endpoint, headers=headers, json=payload, timeout=30)
+        response.raise_for_status()
         
-        try:
-            response = requests.post(api_endpoint, headers=headers, json=payload, timeout=30)
-            current_app.logger.info(f"API响应状态码: {response.status_code}")
-            response.raise_for_status()
-            
-            # 处理流式响应
-            image_url = extract_image_url_from_stream(response.text)
-            
-            if not image_url:
-                current_app.logger.warning("API未返回有效图片URL")
-                return jsonify({
-                    'error': '图片生成失败，请稍后重试',
-                    'current_credits': current_user.credits,
-                    'required_credits': total_cost
-                }), 500
-            
-            # 使用代理URL解决CORS问题
-            proxy_url = get_proxy_url(image_url)
-            if proxy_url:
-                image_url = proxy_url
-                
-        except requests.exceptions.Timeout:
-            current_app.logger.error("API请求超时")
+        image_url = extract_image_url_from_stream(response.text)
+        
+        if not image_url:
+            # 使用占位符但不扣除积分
+            image_url = f"data:image/svg+xml;base64,{generate_placeholder_svg(prompt)}"
+            colors = random.choice([
+                ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7"],
+                ["#FF7675", "#74B9FF", "#00B894", "#FDCB6E", "#E17055"],
+                ["#A8E6CF", "#FFD3B6", "#FFAAA5", "#FF8B94", "#C7CEEA"]
+            ])
             return jsonify({
-                'error': '图片生成超时，请稍后重试',
-                'current_credits': current_user.credits,
-                'required_credits': total_cost
-            }), 504
-        except requests.exceptions.RequestException as e:
-            current_app.logger.error(f"API请求失败: {e}")
-            return jsonify({
-                'error': '图片生成服务暂时不可用，请稍后重试',
-                'current_credits': current_user.credits,
-                'required_credits': total_cost
-            }), 503
+                "imageUrl": image_url,
+                "colors": colors,
+                "user": current_user.to_dict(),
+                "note": "使用占位符图片"
+            }), 200
+        
+        # 使用代理URL
+        proxy_url = get_proxy_url(image_url)
+        if proxy_url:
+            image_url = proxy_url
 
-        # --- 2. 配色方案生成逻辑 ---
-        color_palettes = [
+        # 成功获取图片，扣除积分
+        description = f"生成创作: {prompt[:50]}"
+        current_user.consume_credits(total_cost, description)
+        db.session.commit()
+        
+        colors = random.choice([
             ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7"],
             ["#FF7675", "#74B9FF", "#00B894", "#FDCB6E", "#E17055"],
             ["#A8E6CF", "#FFD3B6", "#FFAAA5", "#FF8B94", "#C7CEEA"],
             ["#F4A261", "#E76F51", "#2A9D8F", "#E9C46A", "#264653"],
             ["#FFADAD", "#FFD6A5", "#FDFFB6", "#CAFFBF", "#9BF6FF"]
-        ]
-        colors = random.choice(color_palettes)
+        ])
 
-        # --- 3. 积分扣除 ---
-        # 只有在成功获取到真实图片URL时才扣除积分
-        if image_url and image_url.startswith('http'):
-            # 真实图片生成成功，扣除积分
-            description = f"生成创作: {prompt[:50]}"
-            current_user.consume_credits(total_cost, description)
-            db.session.commit()
-            current_app.logger.info(f"用户 {current_user.username} 成功消费 {total_cost} 积分。")
-            
-            return jsonify({
-                "imageUrl": image_url,
-                "colors": colors,
-                "user": current_user.to_dict()
-            }), 200
-        else:
-            # 没有成功生成图片，不扣除任何积分
-            current_app.logger.warning(f"图片生成失败，不扣除积分")
-            return jsonify({
-                'error': '图片生成失败，未扣除积分。请检查API配置或稍后重试',
-                'current_credits': current_user.credits,
-                'required_credits': total_cost
-            }), 500
-
-    except requests.exceptions.RequestException as e:
-        db.session.rollback()
-        current_app.logger.error(f"请求外部API时出错: {e}")
         return jsonify({
-            "error": "外部服务暂时无法连接",
+            "imageUrl": image_url,
+            "colors": colors,
+            "user": current_user.to_dict()
+        }), 200
+
+    except requests.exceptions.Timeout:
+        return jsonify({
+            'error': '图片生成超时，请稍后重试',
+            'current_credits': current_user.credits,
+            'required_credits': total_cost
+        }), 504
+    except requests.exceptions.RequestException as e:
+        return jsonify({
+            'error': '图片生成服务暂时不可用，请稍后重试',
             'current_credits': current_user.credits,
             'required_credits': total_cost
         }), 503
     except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"创作生成过程中发生错误: {e}")
-        traceback.print_exc()
         return jsonify({
             'error': f'服务暂时不可用: {str(e)}',
             'current_credits': current_user.credits,
@@ -364,7 +275,7 @@ def generate_creation(current_user):
 @credits_bp.route('/generate-colors', methods=['POST'])
 @require_credits('generate_colors')
 def generate_colors(current_user):
-    """生成配色方案API（带认证和积分扣减）"""
+    """生成配色方案API"""
     try:
         color_palettes = [
             ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7"],
