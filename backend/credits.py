@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-积分管理和核心服务API - 基于GPT-4O Image VIP API
+积分管理和核心服务API - 基于GPT-4O Image VIP API + 图片代理
 """
 from flask import Blueprint, request, jsonify, current_app
 import os
@@ -15,6 +15,7 @@ import json
 
 from models import db, User
 from auth import auth_required
+from image_proxy import get_proxy_url, is_url_accessible
 
 # --- 蓝图和配置 ---
 credits_bp = Blueprint('credits', __name__, url_prefix='/credits')
@@ -111,6 +112,11 @@ def generate_image_with_credits(current_user):
         if not image_url:
             current_app.logger.warning("API未返回有效图片URL，使用占位符")
             image_url = f"data:image/svg+xml;base64,{generate_placeholder_svg(prompt)}"
+        else:
+            # 使用代理URL解决CORS问题
+            proxy_url = get_proxy_url(image_url)
+            if proxy_url:
+                image_url = proxy_url
 
         return jsonify({"imageUrl": image_url, "prompt": prompt}), 200
     
@@ -282,6 +288,11 @@ def generate_creation(current_user):
                     'current_credits': current_user.credits,
                     'required_credits': total_cost
                 }), 500
+            
+            # 使用代理URL解决CORS问题
+            proxy_url = get_proxy_url(image_url)
+            if proxy_url:
+                image_url = proxy_url
                 
         except requests.exceptions.Timeout:
             current_app.logger.error("API请求超时")

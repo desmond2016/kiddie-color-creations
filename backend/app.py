@@ -12,12 +12,12 @@ from models import db, User, RedemptionCode, Setting
 from auth import auth_bp, setup_jwt_error_handlers
 from credits import credits_bp
 from admin import admin_bp
+from image_proxy import image_proxy_bp
 
 load_dotenv()
 
 # --- Flask 应用设置 ---
-app = Flask(__name__)
-
+app = Flask(__name__, static_folder='static', static_url_path='/static')
 
 # --- 配置 ---
 # 从环境变量加载，提供默认值
@@ -60,14 +60,12 @@ migrate = Migrate(app, db) # 初始化 Flask-Migrate
 app.register_blueprint(auth_bp)
 app.register_blueprint(credits_bp)
 app.register_blueprint(admin_bp)
+app.register_blueprint(image_proxy_bp)
 
 # --- 数据库和初始数据设置 ---
-# 注意: 数据库表的创建现在由 Flask-Migrate 处理
-# `flask db init` -> `flask db migrate` -> `flask db upgrade`
-# 初始数据（如管理员）可以在首次迁移后手动或通过脚本添加
 @app.cli.command("init-db-seed")
 def init_db_seed():
-    """在数据库��植入初始数据"""
+    """在数据库中植入初始数据"""
     with app.app_context():
         try:
             # 初始化管理员密码
@@ -91,8 +89,6 @@ def init_db_seed():
         except Exception as e:
             print(f"数据库植入初始数据时发生错误: {e}")
             traceback.print_exc()
-
-# setup_database(app) # 旧的数据库设置函数，已被移除
 
 # --- 通用API路由 ---
 @app.route('/', methods=['GET'])
@@ -131,7 +127,6 @@ def internal_error(error):
 
 @app.after_request
 def after_request(response):
-    # 不添加额外的CORS头部，因为flask-cors已经处理了
     return response
 
 if __name__ == '__main__':
@@ -202,4 +197,3 @@ def initialize_database():
 # 在应用启动时初始化数据库（适用于生产环境）
 with app.app_context():
     initialize_database()
-
