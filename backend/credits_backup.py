@@ -8,7 +8,6 @@ import requests
 import traceback
 import random
 from functools import wraps
-import json
 
 from models import db, User
 from auth import auth_required
@@ -161,7 +160,7 @@ def generate_placeholder_svg(prompt):
 @credits_bp.route('/generate-creation', methods=['POST'])
 @auth_required
 def generate_creation(current_user):
-    """原子化地生成图片和配色方案，只有成功时才扣除积分"""
+    """原子化地生成图片和配色方案，并扣除积分"""
     data = request.get_json()
     prompt = data.get('prompt', '').strip()
     
@@ -190,162 +189,141 @@ def generate_creation(current_user):
         api_key = os.getenv("IMAGE_API_KEY")
         
         if not api_endpoint:
-            current_app.logger.warning("IMAGE_API_ENDPOINT 未配置")
-            return jsonify({
-                'error': '图片生成服务未配置，请联系管理员',
-                'current_credits': current_user.credits,
-                'required_credits': total_cost
-            }), 500
+            current_app.logger.warning("IMAGE_API_ENDPOINT 未配置，使用占位符图片")
+            image_url = f"data:image/svg+xml;base64,{generate_placeholder_svg(prompt)}"
         elif not api_key:
-            current_app.logger.warning("IMAGE_API_KEY 未配置")
-            return jsonify({
-                'error': '图片生成服务未配置，请联系管理员',
-                'current_credits': current_user.credits,
-                'required_credits': total_cost
-            }), 500
-            
-        # 设置headers - 使用 IMAGE_API_KEY 进行身份验证
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
-        }
-        
-        # 检查API端点类型并使用相应的payload格式
-        if "chat/completions" in api_endpoint:
-            # 基于你提供的工作格式，修正payload
-            payload = {
-                "stream": True,
-                "model": "gpt-4o-image-vip",
-                "messages": [
-                    {
-                        "role": "user", 
-                        "content": f"画一个简单的儿童涂色线条画：{prompt}。要求：黑白线条，无填充色彩，清晰轮廓，适合儿童涂色"
-                    }
-                ]
-            }
-        elif "images/generations" in api_endpoint:
-            # DALL-E风格的图片生成API
-            payload = {
-                "prompt": f"Simple black and white line drawing for children to color, featuring: {prompt}. Clean, thick outlines, no shading, white background, coloring book style",
-                "n": 1,
-                "size": "512x512"
-            }
+            current_app.logger.warning("IMAGE_API_KEY 未配置，使用占位符图片")
+            image_url = f"data:image/svg+xml;base64,{generate_placeholder_svg(prompt)}"
         else:
-            # 默认使用ChatGPT格式
-            payload = {
-                "model": "gpt-4o",
-                "messages": [
-                    {
-                        "role": "user", 
-                        "content": f"Generate a simple black and white line drawing for children to color, featuring: {prompt}. The image should have clean, thick outlines, no shading or details inside, suitable for kids coloring book, white background."
-                    }
-                ],
-                "max_tokens": 1000,
-            }
-        
-        current_app.logger.info(f"使用payload: {payload}")
-        
-        try:
-            response = requests.post(api_endpoint, headers=headers, json=payload, timeout=30)
-            current_app.logger.info(f"API响应状态码: {response.status_code}")
-            response.raise_for_status()
+            # 设置headers - 根据gptgod.online API要求调整
+            headers = {"Content-Type": "application/json"}
+            # gptgod.online不需要Authorization header，API key通过其他方式验证
             
-            # 处理stream响应
-            image_url = None
-            if payload.get("stream", False):
-                # 解析SSE流式响应
-                content = response.text
-                current_app.logger.info(f"Stream响应内容: {content}")
-                
-                # 查找图片URL
-                import re
-                
-                # 尝试从响应中提取图片URL
-                url_pattern = r'https?://[^\s<>"{}|\\^`\[\]\n\r]+'
-                urls = re.findall(url_pattern, content)
-                if urls:
-                    # 过滤掉不是图片的URL
-                    for url in urls:
-                        if any(ext in url.lower() for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', 'image']):
-                            image_url = url
-                            break
-                    if not image_url and urls:
-                        image_url = urls[0]  # 取第一个URL
-                    current_app.logger.info(f"从stream中提取到URL: {image_url}")
-                
-                # 如果没找到URL，尝试解析JSON数据块
-                if not image_url:
-                    lines = content.split('\n')
-                    for line in lines:
-                        if line.startswith('data: ') and line.strip() != 'data: [DONE]':
-                            try:
-                                json_str = line[6:]  # 移除 'data: ' 前缀
-                                chunk_data = json.loads(json_str)
-                                if 'choices' in chunk_data and len(chunk_data['choices']) > 0:
-                                    choice = chunk_data['choices'][0]
-                                    if 'delta' in choice and 'content' in choice['delta']:
-                                        chunk_content = choice['delta']['content']
-                                        urls = re.findall(url_pattern, chunk_content)
-                                        if urls:
-                                            image_url = urls[0]
-                                            current_app.logger.info(f"从JSON块中提取到URL: {image_url}")
-                                            break
-                            except json.JSONDecodeError:
-                                continue
+            # 检查API端点类型并使用相应的payload格式
+            if "chat/completions" in api_endpoint:
+                # 基于你提供的工作格式，修正payload
+                payload = {
+                    "stream": True,
+                    "model": "gpt-4o-image-vip",
+                    "messages": [
+                        {
+                            "role": "user", 
+                            "content": f"画一个简单的儿童涂色线条画：{prompt}。要求：黑白线条，无填充色彩，清晰轮廓，适合儿童涂色"
+                        }
+                    ]
+                }
+            elif "images/generations" in api_endpoint:
+                # DALL-E风格的图片生成API
+                payload = {
+                    "prompt": f"Simple black and white line drawing for children to color, featuring: {prompt}. Clean, thick outlines, no shading, white background, coloring book style",
+                    "n": 1,
+                    "size": "512x512"
+                }
             else:
-                # 非stream响应的原有逻辑
-                api_response = response.json()
-                current_app.logger.info(f"API完整响应: {api_response}")
-                
-                # 解析图片URL
-                if 'choices' in api_response and len(api_response['choices']) > 0:
-                    choice = api_response['choices'][0]
-                    current_app.logger.info(f"API choice内容: {choice}")
-                    if 'message' in choice and 'content' in choice['message']:
-                        content = choice['message']['content']
-                        current_app.logger.info(f"API返回的content: {content}")
-                        if content.startswith('http'):
-                            image_url = content.strip()
-                        else:
-                            # 尝试从content中提取URL
-                            import re
-                            url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
-                            urls = re.findall(url_pattern, content)
-                            if urls:
-                                image_url = urls[0]
-                                current_app.logger.info(f"从content中提取到URL: {image_url}")
-                
-                # 检查其他可能的响应格式
-                if not image_url and 'data' in api_response:
-                    current_app.logger.info(f"检查data字段: {api_response['data']}")
-                    if isinstance(api_response['data'], list) and len(api_response['data']) > 0:
-                        first_item = api_response['data'][0]
-                        if 'url' in first_item:
-                            image_url = first_item['url']
-                            current_app.logger.info(f"从data[0].url获取到图片: {image_url}")
+                # 默认使用ChatGPT格式
+                payload = {
+                    "model": "gpt-4o",
+                    "messages": [
+                        {
+                            "role": "user", 
+                            "content": f"Generate a simple black and white line drawing for children to color, featuring: {prompt}. The image should have clean, thick outlines, no shading or details inside, suitable for kids coloring book, white background."
+                        }
+                    ],
+                    "max_tokens": 1000,
+                }
             
-            if not image_url:
-                current_app.logger.warning("API未返回图片URL")
-                return jsonify({
-                    'error': '图片生成失败，请稍后重试',
-                    'current_credits': current_user.credits,
-                    'required_credits': total_cost
-                }), 500
+            current_app.logger.info(f"使用payload: {payload}")
+            
+            try:
+                response = requests.post(api_endpoint, headers=headers, json=payload, timeout=30)
+                current_app.logger.info(f"API响应状态码: {response.status_code}")
+                response.raise_for_status()
                 
-        except requests.exceptions.Timeout:
-            current_app.logger.error("API请求超时")
-            return jsonify({
-                'error': '图片生成超时，请稍后重试',
-                'current_credits': current_user.credits,
-                'required_credits': total_cost
-            }), 504
-        except requests.exceptions.RequestException as e:
-            current_app.logger.error(f"API请求失败: {e}")
-            return jsonify({
-                'error': '图片生成服务暂时不可用，请稍后重试',
-                'current_credits': current_user.credits,
-                'required_credits': total_cost
-            }), 503
+                # 处理stream响应
+                if payload.get("stream", False):
+                    # 解析SSE流式响应
+                    content = response.text
+                    current_app.logger.info(f"Stream响应内容: {content}")
+                    
+                    # 查找图片URL
+                    image_url = None
+                    import re
+                    
+                    # 尝试从响应中提取图片URL
+                    url_pattern = r'https?://[^\s<>"{}|\\^`\[\]\n\r]+'
+                    urls = re.findall(url_pattern, content)
+                    if urls:
+                        # 过滤掉不是图片的URL
+                        for url in urls:
+                            if any(ext in url.lower() for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', 'image']):
+                                image_url = url
+                                break
+                        if not image_url and urls:
+                            image_url = urls[0]  # 取第一个URL
+                        current_app.logger.info(f"从stream中提取到URL: {image_url}")
+                    
+                    # 如果没找到URL，尝试解析JSON数据块
+                    if not image_url:
+                        lines = content.split('\n')
+                        for line in lines:
+                            if line.startswith('data: ') and line.strip() != 'data: [DONE]':
+                                try:
+                                    json_str = line[6:]  # 移除 'data: ' 前缀
+                                    chunk_data = json.loads(json_str)
+                                    if 'choices' in chunk_data and len(chunk_data['choices']) > 0:
+                                        choice = chunk_data['choices'][0]
+                                        if 'delta' in choice and 'content' in choice['delta']:
+                                            chunk_content = choice['delta']['content']
+                                            urls = re.findall(url_pattern, chunk_content)
+                                            if urls:
+                                                image_url = urls[0]
+                                                current_app.logger.info(f"从JSON块中提取到URL: {image_url}")
+                                                break
+                                except json.JSONDecodeError:
+                                    continue
+                else:
+                    # 非stream响应的原有逻辑
+                    api_response = response.json()
+                    current_app.logger.info(f"API完整响应: {api_response}")
+                    
+                    # 解析图片URL
+                    image_url = None
+                    if 'choices' in api_response and len(api_response['choices']) > 0:
+                        choice = api_response['choices'][0]
+                        current_app.logger.info(f"API choice内容: {choice}")
+                        if 'message' in choice and 'content' in choice['message']:
+                            content = choice['message']['content']
+                            current_app.logger.info(f"API返回的content: {content}")
+                            if content.startswith('http'):
+                                image_url = content.strip()
+                            else:
+                                # 尝试从content中提取URL
+                                import re
+                                url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
+                                urls = re.findall(url_pattern, content)
+                                if urls:
+                                    image_url = urls[0]
+                                    current_app.logger.info(f"从content中提取到URL: {image_url}")
+                    
+                    # 检查其他可能的响应格式
+                    if not image_url and 'data' in api_response:
+                        current_app.logger.info(f"检查data字段: {api_response['data']}")
+                        if isinstance(api_response['data'], list) and len(api_response['data']) > 0:
+                            first_item = api_response['data'][0]
+                            if 'url' in first_item:
+                                image_url = first_item['url']
+                                current_app.logger.info(f"从data[0].url获取到图片: {image_url}")
+                
+                if not image_url:
+                    current_app.logger.warning("API未返回图片URL，使用占位符图片")
+                    image_url = f"data:image/svg+xml;base64,{generate_placeholder_svg(prompt)}"
+                    
+            except requests.exceptions.Timeout:
+                current_app.logger.error("API请求超时，使用占位符图片")
+                image_url = f"data:image/svg+xml;base64,{generate_placeholder_svg(prompt)}"
+            except requests.exceptions.RequestException as e:
+                current_app.logger.error(f"API请求失败: {e}，使用占位符图片")
+                image_url = f"data:image/svg+xml;base64,{generate_placeholder_svg(prompt)}"
 
         # --- 2. 配色方案生成逻辑 ---
         color_palettes = [
@@ -355,45 +333,49 @@ def generate_creation(current_user):
         colors = random.choice(color_palettes)
 
         # --- 3. 积分扣除 ---
-        # 只有在成功获取到真实图片URL时才扣除积分
-        if image_url and image_url.startswith('http'):
+        # 只有在成功获取到有效图片URL时才扣除积分
+        if image_url and not image_url.startswith("data:image/svg+xml;base64,"):
             # 真实图片生成成功，扣除积分
             description = f"生成创作: {prompt[:50]}"
             current_user.consume_credits(total_cost, description)
             db.session.commit()
             current_app.logger.info(f"用户 {current_user.username} 成功消费 {total_cost} 积分。")
-            
+        else:
+            # 如果是占位符图片，只扣1积分（作为尝试费用）
+            try_cost = 1
+            if current_user.credits >= try_cost:
+                description = f"图片生成尝试: {prompt[:50]}"
+                current_user.consume_credits(try_cost, description)
+                db.session.commit()
+                current_app.logger.info(f"用户 {current_user.username} 图片生成失败，扣除尝试费用 {try_cost} 积分。")
+            # 使用免费的默认配色方案
+            colors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7"]
+
+        # 添加积分料用信息提示
+        if image_url.startswith("data:image/svg+xml;base64,"):
+            # 占位符图片情况下的特殊返回
+            return jsonify({
+                "imageUrl": image_url,
+                "colors": colors,
+                "user": current_user.to_dict(),
+                "message": "图片生成服务暂时不可用，已生成占位符图片，请联系管理员"
+            }), 200
+        else:
             return jsonify({
                 "imageUrl": image_url,
                 "colors": colors,
                 "user": current_user.to_dict()
             }), 200
-        else:
-            # 没有成功生成图片，不扣除任何积分
-            current_app.logger.warning(f"图片生成失败，不扣除积分")
-            return jsonify({
-                'error': '图片生成失败，未扣除积分。请检查API配置或稍后重试',
-                'current_credits': current_user.credits,
-                'required_credits': total_cost
-            }), 500
 
     except requests.exceptions.RequestException as e:
         db.session.rollback()
         current_app.logger.error(f"请求外部API时出错: {e}")
-        return jsonify({
-            "error": "外部服务暂时无法连接",
-            'current_credits': current_user.credits,
-            'required_credits': total_cost
-        }), 503
+        return jsonify({"error": "外部服务暂时无法连接"}), 503
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"创作生成过程中发生错误: {e}")
         traceback.print_exc()
-        return jsonify({
-            'error': f'服务暂时不可用: {str(e)}',
-            'current_credits': current_user.credits,
-            'required_credits': total_cost
-        }), 500
+        return jsonify({'error': f'服务暂时不可用: {str(e)}'}), 500
 
 
 @credits_bp.route('/generate-colors', methods=['POST'])
