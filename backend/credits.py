@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-积分管理和核心服务API
+积分管理和核心服务API - 基于GPT-4O Image VIP API
 """
 from flask import Blueprint, request, jsonify, current_app
 import os
 import requests
 import traceback
 import random
+import base64
+import re
+import urllib.parse
 from functools import wraps
 import json
 
@@ -74,56 +77,46 @@ def generate_image_with_credits(current_user):
 
     try:
         # 从环境变量中获取 API 配置
-        api_endpoint = os.getenv("IMAGE_API_ENDPOINT")
+        api_endpoint = os.getenv("IMAGE_API_ENDPOINT", "https://api.gptgod.online/v1/chat/completions")
         api_key = os.getenv("IMAGE_API_KEY")
 
-        if not api_endpoint or not api_key:
-            current_app.logger.error("图片生成API的端点或密钥未配置。")
+        if not api_key:
+            current_app.logger.error("图片生成API密钥未配置。")
             return jsonify({"error": "图片生成服务当前不可用"}), 500
 
         headers = {
-            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
         }
         
-        # 构建符合外部API要求的请求体 - 改进提示词用于线条画生成
+        # 基于GPT-4O Image VIP API的格式构建请求
         payload = {
-            "model": "gpt-4o",
+            "stream": True,
+            "model": "gpt-4o-image-vip",
             "messages": [
                 {
                     "role": "user", 
-                    "content": f"Generate a simple black and white line drawing for children to color, featuring: {prompt}. The image should have clean, thick outlines, no shading or details inside, suitable for kids coloring book, white background."
+                    "content": f"画一个简单的儿童涂色线条画：{prompt}。要求：黑白线条，无填充色彩，清晰轮廓，适合儿童涂色，白色背景"
                 }
-            ],
-            "max_tokens": 1000,
+            ]
         }
 
         # 发起对外部API的请求
         response = requests.post(api_endpoint, headers=headers, json=payload, timeout=30)
         response.raise_for_status()
 
-        # 解析响应并提取图片URL
-        api_response = response.json()
-        
-        # 根据实际API响应格式调整解析逻辑
-        image_url = None
-        if 'choices' in api_response and len(api_response['choices']) > 0:
-            choice = api_response['choices'][0]
-            if 'message' in choice and 'content' in choice['message']:
-                content = choice['message']['content']
-                # 如果content包含图片URL，提取它
-                if content.startswith('http'):
-                    image_url = content.strip()
-                else:
-                    # 如果API返回的是描述而不是图片URL，则使用占位符
-                    image_url = f"data:image/svg+xml;base64,{generate_placeholder_svg(prompt)}"
+        # 解析流式响应并提取图片URL
+        image_url = extract_image_url_from_stream(response.text)
         
         if not image_url:
-            current_app.logger.error(f"API响应中未找到图片URL: {api_response}")
-            # 返回占位符图片
+            current_app.logger.warning("API未返回有效图片URL，使用占位符")
             image_url = f"data:image/svg+xml;base64,{generate_placeholder_svg(prompt)}"
 
         return jsonify({"imageUrl": image_url, "prompt": prompt}), 200
+    
+    except requests.exceptions.Timeout:
+        current_app.logger.error("API请求超时")
+        return jsonify({"error": "图片生成超时，请稍后重试"}), 504
     except requests.exceptions.RequestException as e:
         current_app.logger.error(f"请求图片生成API时出错: {e}")
         return jsonify({"error": "图片生成服务暂时无法连接"}), 503
@@ -132,11 +125,69 @@ def generate_image_with_credits(current_user):
         traceback.print_exc()
         return jsonify({"error": "图片生成失败"}), 500
 
+def extract_image_url_from_stream(content):
+    """从流式响应中提取图片URL"""
+    if not content:
+        return None
+    
+    try:
+        # 查找图片URL
+        url_pattern = r'https?://[^\s<>"\'\[\]{}\\|^`\n\r]+'
+        urls = re.findall(url_pattern, content)
+        
+        if urls:
+            # 优先选择图片相关的URL
+            for url in urls:
+                # URL解码处理
+                try:
+                    decoded_url = urllib.parse.unquote(url)
+                    
+                    # 检查是否是图片URL
+                    if any(keyword in decoded_url.lower() for keyword in ['.jpg', '.jpeg', '.png', '.gif', '.webp', 'image', 'openai.com', 'videos.openai.com']):
+                        return decoded_url
+                except Exception:
+                    continue
+            
+            # 如果没有找到明确的图片URL，返回第一个URL
+            if urls:
+                try:
+                    return urllib.parse.unquote(urls[0])
+                except Exception:
+                    return urls[0]
+        
+        # 尝试解析JSON数据块
+        lines = content.split('\n')
+        for line in lines:
+            if line.startswith('data: ') and line.strip() != 'data: [DONE]':
+                try:
+                    json_str = line[6:]  # 移除 'data: ' 前缀
+                    chunk_data = json.loads(json_str)
+                    if 'choices' in chunk_data and len(chunk_data['choices']) > 0:
+                        choice = chunk_data['choices'][0]
+                        if 'delta' in choice and 'content' in choice['delta']:
+                            chunk_content = choice['delta']['content']
+                            chunk_urls = re.findall(url_pattern, chunk_content)
+                            if chunk_urls:
+                                try:
+                                    return urllib.parse.unquote(chunk_urls[0])
+                                except Exception:
+                                    return chunk_urls[0]
+                except (json.JSONDecodeError, KeyError, IndexError):
+                    continue
+        
+        return None
+        
+    except Exception as e:
+        current_app.logger.error(f"提取图片URL失败: {e}")
+        return None
+
 def generate_placeholder_svg(prompt):
-    """生成占位符SVG图片的base64编码"""
-    import base64
-    # 安全地处理提示词，避免XSS
-    safe_prompt = prompt.replace('<', '&lt;').replace('>', '&gt;').replace('&', '&amp;')[:30]
+    """生成占位符SVG图片"""
+    # 确保prompt是安全的字符串
+    safe_prompt = prompt[:20] + "..." if len(prompt) > 20 else prompt
+    # 转义特殊字符以防止XSS
+    safe_prompt = safe_prompt.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    
     svg_content = f'''<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
         <rect width="400" height="400" fill="white" stroke="black" stroke-width="2"/>
         <circle cx="200" cy="120" r="40" fill="none" stroke="black" stroke-width="3"/>
@@ -155,7 +206,6 @@ def generate_placeholder_svg(prompt):
         </text>
     </svg>'''
     return base64.b64encode(svg_content.encode('utf-8')).decode('utf-8')
-
 
 # --- 新的统一生成端点 ---
 @credits_bp.route('/generate-creation', methods=['POST'])
@@ -186,17 +236,10 @@ def generate_creation(current_user):
 
     try:
         # --- 1. 图片生成逻辑 ---
-        api_endpoint = os.getenv("IMAGE_API_ENDPOINT")
+        api_endpoint = os.getenv("IMAGE_API_ENDPOINT", "https://api.gptgod.online/v1/chat/completions")
         api_key = os.getenv("IMAGE_API_KEY")
         
-        if not api_endpoint:
-            current_app.logger.warning("IMAGE_API_ENDPOINT 未配置")
-            return jsonify({
-                'error': '图片生成服务未配置，请联系管理员',
-                'current_credits': current_user.credits,
-                'required_credits': total_cost
-            }), 500
-        elif not api_key:
+        if not api_key:
             current_app.logger.warning("IMAGE_API_KEY 未配置")
             return jsonify({
                 'error': '图片生成服务未配置，请联系管理员',
@@ -210,38 +253,17 @@ def generate_creation(current_user):
             "Authorization": f"Bearer {api_key}"
         }
         
-        # 检查API端点类型并使用相应的payload格式
-        if "chat/completions" in api_endpoint:
-            # 基于你提供的工作格式，修正payload
-            payload = {
-                "stream": True,
-                "model": "gpt-4o-image-vip",
-                "messages": [
-                    {
-                        "role": "user", 
-                        "content": f"画一个简单的儿童涂色线条画：{prompt}。要求：黑白线条，无填充色彩，清晰轮廓，适合儿童涂色"
-                    }
-                ]
-            }
-        elif "images/generations" in api_endpoint:
-            # DALL-E风格的图片生成API
-            payload = {
-                "prompt": f"Simple black and white line drawing for children to color, featuring: {prompt}. Clean, thick outlines, no shading, white background, coloring book style",
-                "n": 1,
-                "size": "512x512"
-            }
-        else:
-            # 默认使用ChatGPT格式
-            payload = {
-                "model": "gpt-4o",
-                "messages": [
-                    {
-                        "role": "user", 
-                        "content": f"Generate a simple black and white line drawing for children to color, featuring: {prompt}. The image should have clean, thick outlines, no shading or details inside, suitable for kids coloring book, white background."
-                    }
-                ],
-                "max_tokens": 1000,
-            }
+        # 基于GPT-4O Image VIP API的格式构建请求
+        payload = {
+            "stream": True,
+            "model": "gpt-4o-image-vip",
+            "messages": [
+                {
+                    "role": "user", 
+                    "content": f"画一个简单的儿童涂色线条画：{prompt}。要求：黑白线条，无填充色彩，清晰轮廓，适合儿童涂色，白色背景"
+                }
+            ]
+        }
         
         current_app.logger.info(f"使用payload: {payload}")
         
@@ -250,82 +272,11 @@ def generate_creation(current_user):
             current_app.logger.info(f"API响应状态码: {response.status_code}")
             response.raise_for_status()
             
-            # 处理stream响应
-            image_url = None
-            if payload.get("stream", False):
-                # 解析SSE流式响应
-                content = response.text
-                current_app.logger.info(f"Stream响应内容: {content}")
-                
-                # 查找图片URL
-                import re
-                
-                # 尝试从响应中提取图片URL
-                url_pattern = r'https?://[^\s<>"{}|\\^`\[\]\n\r]+'
-                urls = re.findall(url_pattern, content)
-                if urls:
-                    # 过滤掉不是图片的URL
-                    for url in urls:
-                        if any(ext in url.lower() for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', 'image']):
-                            image_url = url
-                            break
-                    if not image_url and urls:
-                        image_url = urls[0]  # 取第一个URL
-                    current_app.logger.info(f"从stream中提取到URL: {image_url}")
-                
-                # 如果没找到URL，尝试解析JSON数据块
-                if not image_url:
-                    lines = content.split('\n')
-                    for line in lines:
-                        if line.startswith('data: ') and line.strip() != 'data: [DONE]':
-                            try:
-                                json_str = line[6:]  # 移除 'data: ' 前缀
-                                chunk_data = json.loads(json_str)
-                                if 'choices' in chunk_data and len(chunk_data['choices']) > 0:
-                                    choice = chunk_data['choices'][0]
-                                    if 'delta' in choice and 'content' in choice['delta']:
-                                        chunk_content = choice['delta']['content']
-                                        urls = re.findall(url_pattern, chunk_content)
-                                        if urls:
-                                            image_url = urls[0]
-                                            current_app.logger.info(f"从JSON块中提取到URL: {image_url}")
-                                            break
-                            except json.JSONDecodeError:
-                                continue
-            else:
-                # 非stream响应的原有逻辑
-                api_response = response.json()
-                current_app.logger.info(f"API完整响应: {api_response}")
-                
-                # 解析图片URL
-                if 'choices' in api_response and len(api_response['choices']) > 0:
-                    choice = api_response['choices'][0]
-                    current_app.logger.info(f"API choice内容: {choice}")
-                    if 'message' in choice and 'content' in choice['message']:
-                        content = choice['message']['content']
-                        current_app.logger.info(f"API返回的content: {content}")
-                        if content.startswith('http'):
-                            image_url = content.strip()
-                        else:
-                            # 尝试从content中提取URL
-                            import re
-                            url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
-                            urls = re.findall(url_pattern, content)
-                            if urls:
-                                image_url = urls[0]
-                                current_app.logger.info(f"从content中提取到URL: {image_url}")
-                
-                # 检查其他可能的响应格式
-                if not image_url and 'data' in api_response:
-                    current_app.logger.info(f"检查data字段: {api_response['data']}")
-                    if isinstance(api_response['data'], list) and len(api_response['data']) > 0:
-                        first_item = api_response['data'][0]
-                        if 'url' in first_item:
-                            image_url = first_item['url']
-                            current_app.logger.info(f"从data[0].url获取到图片: {image_url}")
+            # 处理流式响应
+            image_url = extract_image_url_from_stream(response.text)
             
             if not image_url:
-                current_app.logger.warning("API未返回图片URL")
+                current_app.logger.warning("API未返回有效图片URL")
                 return jsonify({
                     'error': '图片生成失败，请稍后重试',
                     'current_credits': current_user.credits,
@@ -351,6 +302,9 @@ def generate_creation(current_user):
         color_palettes = [
             ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7"],
             ["#FF7675", "#74B9FF", "#00B894", "#FDCB6E", "#E17055"],
+            ["#A8E6CF", "#FFD3B6", "#FFAAA5", "#FF8B94", "#C7CEEA"],
+            ["#F4A261", "#E76F51", "#2A9D8F", "#E9C46A", "#264653"],
+            ["#FFADAD", "#FFD6A5", "#FDFFB6", "#CAFFBF", "#9BF6FF"]
         ]
         colors = random.choice(color_palettes)
 
@@ -404,7 +358,11 @@ def generate_colors(current_user):
         color_palettes = [
             ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7"],
             ["#FF7675", "#74B9FF", "#00B894", "#FDCB6E", "#E17055"],
+            ["#A8E6CF", "#FFD3B6", "#FFAAA5", "#FF8B94", "#C7CEEA"],
+            ["#F4A261", "#E76F51", "#2A9D8F", "#E9C46A", "#264653"],
+            ["#FFADAD", "#FFD6A5", "#FDFFB6", "#CAFFBF", "#9BF6FF"]
         ]
-        return jsonify({"colors": random.choice(color_palettes)}), 200
+        colors = random.choice(color_palettes)
+        return jsonify({"colors": colors}), 200
     except Exception as e:
         return jsonify({"error": "配色生成失败"}), 500

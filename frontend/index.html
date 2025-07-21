@@ -730,7 +730,21 @@
                     
                     mainImage.onerror = function() {
                         console.error('图片加载失败:', data.imageUrl);
-                        // 图片加载失败时显示错误信息
+                        
+                        // 尝试URL解码
+                        try {
+                            const decodedUrl = decodeURIComponent(data.imageUrl);
+                            console.log('尝试解码URL:', decodedUrl);
+                            if (decodedUrl !== data.imageUrl) {
+                                console.log('使用解码后的URL重试');
+                                mainImage.src = decodedUrl;
+                                return;
+                            }
+                        } catch (error) {
+                            console.error('URL解码失败:', error);
+                        }
+                        
+                        // 图片加载失败时的处理
                         showMessage('error-message', '图片加载失败，请稍后重试', 'error');
                         placeholderContent.style.display = 'flex';
                         mainImage.style.display = 'none';
