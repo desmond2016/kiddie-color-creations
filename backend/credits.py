@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-积分管理和核心服务API - 修复版URL处理
+积分管理和核心服务API - 稳定版（含URL验证和重试机制）
 """
 from flask import Blueprint, request, jsonify, current_app
 import os
@@ -10,6 +10,7 @@ import random
 import base64
 import re
 import urllib.parse
+import time
 from functools import wraps
 
 from models import db, User
@@ -100,6 +101,7 @@ def extract_image_url_from_stream(content):
             if line.startswith('data: ') and line != 'data: [DONE]':
                 try:
                     json_str = line[6:]
+                    import json
                     chunk_data = json.loads(json_str)
                     
                     if 'choices' in chunk_data and len(chunk_data['choices']) > 0:
@@ -154,6 +156,29 @@ def extract_image_url_from_stream(content):
         current_app.logger.error(f"提取图片URL时发生异常: {e}")
         return None
 
+# --- URL验证和重试机制 ---
+def validate_image_url(url, timeout=5):
+    """验证图片URL是否可访问"""
+    if not url:
+        return False
+    
+    try:
+        response = requests.head(url, timeout=timeout, allow_redirects=True)
+        if response.status_code == 200:
+            content_type = response.headers.get('content-type', '')
+            if content_type.startswith('image/'):
+                return True
+        
+        # 尝试GET请求作为备选
+        response = requests.get(url, timeout=timeout, stream=True)
+        if response.status_code == 200 and len(response.content) > 100:
+            return True
+            
+    except Exception as e:
+        current_app.logger.warning(f"URL验证失败: {url} - {e}")
+    
+    return False
+
 def generate_placeholder_svg(prompt):
     """生成占位符SVG图片"""
     safe_prompt = prompt[:20] + "..." if len(prompt) > 20 else prompt
@@ -175,24 +200,11 @@ def generate_placeholder_svg(prompt):
     </svg>'''
     return base64.b64encode(svg_content.encode('utf-8')).decode('utf-8')
 
-# --- 修复版URL处理 ---
-def get_safe_image_url(original_url):
-    """获取安全的图片URL - 修复版"""
-    if not original_url:
-        return None
-    
-    # 如果是本地URL或数据URL，直接返回
-    if original_url.startswith('data:') or original_url.startswith('/'):
-        return original_url
-    
-    # 直接返回原始URL，避免代理问题
-    return original_url
-
-# --- API 路由 ---
+# --- 稳定版图片生成 ---
 @credits_bp.route('/generate-creation', methods=['POST'])
 @auth_required
 def generate_creation(current_user):
-    """原子化地生成图片和配色方案"""
+    """稳定版：原子化地生成图片和配色方案"""
     data = request.get_json()
     prompt = data.get('prompt', '').strip()
     
@@ -240,61 +252,86 @@ def generate_creation(current_user):
             ]
         }
         
-        response = requests.post(api_endpoint, headers=headers, json=payload, timeout=30)
-        response.raise_for_status()
+        current_app.logger.info(f"开始生成创作: {prompt}")
         
-        image_url = extract_image_url_from_stream(response.text)
-        
-        if not image_url:
-            # 使用占位符但不扣除积分
-            image_url = f"data:image/svg+xml;base64,{generate_placeholder_svg(prompt)}"
-            colors = random.choice([
-                ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7"],
-                ["#FF7675", "#74B9FF", "#00B894", "#FDCB6E", "#E17055"],
-                ["#A8E6CF", "#FFD3B6", "#FFAAA5", "#FF8B94", "#C7CEEA"]
-            ])
-            return jsonify({
-                "imageUrl": image_url,
-                "colors": colors,
-                "user": current_user.to_dict(),
-                "note": "使用占位符图片"
-            }), 200
-        
-        # 直接返回原始URL，避免代理问题
-        safe_url = get_safe_image_url(image_url)
+        # 重试机制
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(api_endpoint, headers=headers, json=payload, timeout=30)
+                response.raise_for_status()
+                
+                image_url = extract_image_url_from_stream(response.text)
+                
+                if image_url:
+                    # 验证URL是否可访问
+                    if validate_image_url(image_url):
+                        # 成功获取并验证图片，扣除积分
+                        description = f"生成创作: {prompt[:50]}"
+                        current_user.consume_credits(total_cost, description)
+                        db.session.commit()
+                        
+                        colors = random.choice([
+                            ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7"],
+                            ["#FF7675", "#74B9FF", "#00B894", "#FDCB6E", "#E17055"],
+                            ["#A8E6CF", "#FFD3B6", "#FFAAA5", "#FF8B94", "#C7CEEA"],
+                            ["#F4A261", "#E76F51", "#2A9D8F", "#E9C46A", "#264653"],
+                            ["#FFADAD", "#FFD6A5", "#FDFFB6", "#CAFFBF", "#9BF6FF"]
+                        ])
 
-        # 成功获取图片，扣除积分
-        description = f"生成创作: {prompt[:50]}"
-        current_user.consume_credits(total_cost, description)
-        db.session.commit()
+                        return jsonify({
+                            "imageUrl": image_url,
+                            "colors": colors,
+                            "user": current_user.to_dict()
+                        }), 200
+                    else:
+                        current_app.logger.warning(f"图片URL验证失败: {image_url}")
+                        if attempt == max_retries - 1:
+                            # 最后一次尝试失败，使用占位符但不扣除积分
+                            break
+                        time.sleep(1)  # 重试前等待
+                        continue
+                else:
+                    current_app.logger.warning("未找到有效图片URL")
+                    break
+                    
+            except requests.exceptions.Timeout:
+                if attempt == max_retries - 1:
+                    return jsonify({
+                        'error': '图片生成超时，请稍后重试',
+                        'current_credits': current_user.credits,
+                        'required_credits': total_cost
+                    }), 504
+                time.sleep(1)
+                continue
+            except requests.exceptions.RequestException as e:
+                if attempt == max_retries - 1:
+                    return jsonify({
+                        'error': '图片生成服务暂时不可用，请稍后重试',
+                        'current_credits': current_user.credits,
+                        'required_credits': total_cost
+                    }), 503
+                time.sleep(1)
+                continue
         
+        # 所有重试都失败，使用占位符但不扣除积分
+        image_url = f"data:image/svg+xml;base64,{generate_placeholder_svg(prompt)}"
         colors = random.choice([
             ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7"],
             ["#FF7675", "#74B9FF", "#00B894", "#FDCB6E", "#E17055"],
-            ["#A8E6CF", "#FFD3B6", "#FFAAA5", "#FF8B94", "#C7CEEA"],
-            ["#F4A261", "#E76F51", "#2A9D8F", "#E9C46A", "#264653"],
-            ["#FFADAD", "#FFD6A5", "#FDFFB6", "#CAFFBF", "#9BF6FF"]
+            ["#A8E6CF", "#FFD3B6", "#FFAAA5", "#FF8B94", "#C7CEEA"]
         ])
-
+        
         return jsonify({
-            "imageUrl": safe_url,
+            "imageUrl": image_url,
             "colors": colors,
-            "user": current_user.to_dict()
+            "user": current_user.to_dict(),
+            "note": "使用占位符图片，API响应异常"
         }), 200
 
-    except requests.exceptions.Timeout:
-        return jsonify({
-            'error': '图片生成超时，请稍后重试',
-            'current_credits': current_user.credits,
-            'required_credits': total_cost
-        }), 504
-    except requests.exceptions.RequestException as e:
-        return jsonify({
-            'error': '图片生成服务暂时不可用，请稍后重试',
-            'current_credits': current_user.credits,
-            'required_credits': total_cost
-        }), 503
     except Exception as e:
+        current_app.logger.error(f"创作生成异常: {e}")
+        traceback.print_exc()
         return jsonify({
             'error': f'服务暂时不可用: {str(e)}',
             'current_credits': current_user.credits,
