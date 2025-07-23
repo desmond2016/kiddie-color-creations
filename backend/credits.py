@@ -228,10 +228,11 @@ def generate_creation(current_user):
     try:
         api_endpoint = os.getenv("IMAGE_API_ENDPOINT", "https://api.gptgod.online/v1/chat/completions")
         api_key = os.getenv("IMAGE_API_KEY")
-        
+
         if not api_key:
+            current_app.logger.error("IMAGE_API_KEY未配置")
             return jsonify({
-                'error': '图片生成服务未配置，请联系管理员',
+                'error': '图片生成服务未配置，请联系管理员。您的积分未被扣除。',
                 'current_credits': current_user.credits,
                 'required_credits': total_cost
             }), 500
@@ -270,7 +271,7 @@ def generate_creation(current_user):
                         description = f"生成创作: {prompt[:50]}"
                         current_user.consume_credits(total_cost, description)
                         db.session.commit()
-                        
+
                         colors = random.choice([
                             ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7"],
                             ["#FF7675", "#74B9FF", "#00B894", "#FDCB6E", "#E17055"],
@@ -287,13 +288,25 @@ def generate_creation(current_user):
                     else:
                         current_app.logger.warning(f"图片URL验证失败: {image_url}")
                         if attempt == max_retries - 1:
-                            # 最后一次尝试失败，使用占位符但不扣除积分
-                            break
+                            # 最后一次尝试失败，返回错误而不是占位符
+                            return jsonify({
+                                'error': '图片生成失败，请稍后重试。您的积分未被扣除。',
+                                'current_credits': current_user.credits,
+                                'required_credits': total_cost
+                            }), 503
                         time.sleep(1)  # 重试前等待
                         continue
                 else:
                     current_app.logger.warning("未找到有效图片URL")
-                    break
+                    if attempt == max_retries - 1:
+                        # 最后一次尝试失败，返回错误而不是占位符
+                        return jsonify({
+                            'error': '图片生成失败，请稍后重试。您的积分未被扣除。',
+                            'current_credits': current_user.credits,
+                            'required_credits': total_cost
+                        }), 503
+                    time.sleep(1)
+                    continue
                     
             except requests.exceptions.Timeout:
                 if attempt == max_retries - 1:
@@ -314,20 +327,12 @@ def generate_creation(current_user):
                 time.sleep(1)
                 continue
         
-        # 所有重试都失败，使用占位符但不扣除积分
-        image_url = f"data:image/svg+xml;base64,{generate_placeholder_svg(prompt)}"
-        colors = random.choice([
-            ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7"],
-            ["#FF7675", "#74B9FF", "#00B894", "#FDCB6E", "#E17055"],
-            ["#A8E6CF", "#FFD3B6", "#FFAAA5", "#FF8B94", "#C7CEEA"]
-        ])
-        
+        # 所有重试都失败，返回错误信息而不是占位符
         return jsonify({
-            "imageUrl": image_url,
-            "colors": colors,
-            "user": current_user.to_dict(),
-            "note": "使用占位符图片，API响应异常"
-        }), 200
+            'error': '图片生成服务暂时不可用，请稍后重试。您的积分未被扣除。',
+            'current_credits': current_user.credits,
+            'required_credits': total_cost
+        }), 503
 
     except Exception as e:
         current_app.logger.error(f"创作生成异常: {e}")
