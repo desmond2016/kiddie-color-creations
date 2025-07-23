@@ -172,25 +172,55 @@ def extract_image_url_from_stream(content):
 
 # --- URL验证和重试机制 ---
 def validate_image_url(url, timeout=5):
-    """验证图片URL是否可访问"""
+    """验证图片URL是否可访问 - 优化版"""
     if not url:
         return False
-    
+
+    # 对于可信域名，跳过验证直接返回True
+    trusted_domains = [
+        'openai.com',
+        'videos.openai.com',
+        'oaidalleapiprodscus.blob.core.windows.net',  # OpenAI DALL-E存储
+        'cdn.openai.com',
+        'images.openai.com'
+    ]
+
+    for domain in trusted_domains:
+        if domain in url:
+            current_app.logger.info(f"跳过可信域名验证: {domain} - {url[:100]}...")
+            return True
+
+    # 对其他域名进行验证
     try:
-        response = requests.head(url, timeout=timeout, allow_redirects=True)
+        # 使用更友好的请求头
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (compatible; ImageBot/1.0)',
+            'Accept': 'image/*,*/*;q=0.8',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive'
+        }
+
+        # 首先尝试HEAD请求
+        response = requests.head(url, timeout=timeout, allow_redirects=True, headers=headers)
         if response.status_code == 200:
             content_type = response.headers.get('content-type', '')
             if content_type.startswith('image/'):
+                current_app.logger.info(f"HEAD请求验证成功: {url[:100]}...")
                 return True
-        
-        # 尝试GET请求作为备选
-        response = requests.get(url, timeout=timeout, stream=True)
-        if response.status_code == 200 and len(response.content) > 100:
-            return True
-            
+
+        # 如果HEAD失败，尝试GET请求
+        current_app.logger.info(f"HEAD请求失败，尝试GET请求: {url[:100]}...")
+        response = requests.get(url, timeout=timeout, stream=True, headers=headers)
+        if response.status_code == 200:
+            # 读取前1KB检查是否为图片
+            chunk = next(response.iter_content(1024), b'')
+            if len(chunk) > 100:
+                current_app.logger.info(f"GET请求验证成功: {url[:100]}...")
+                return True
+
     except Exception as e:
-        current_app.logger.warning(f"URL验证失败: {url} - {e}")
-    
+        current_app.logger.warning(f"URL验证失败: {url[:100]}... - {e}")
+
     return False
 
 def generate_placeholder_svg(prompt):
@@ -286,44 +316,47 @@ def generate_creation(current_user):
                 if image_url:
                     current_app.logger.info("开始验证图片URL可访问性...")
                     # 验证URL是否可访问
-                    if validate_image_url(image_url):
+                    url_is_valid = validate_image_url(image_url)
+
+                    if url_is_valid:
                         current_app.logger.info("图片URL验证成功，开始扣除积分")
-                        # 成功获取并验证图片，扣除积分
-                        description = f"生成创作: {prompt[:50]}"
-                        current_user.consume_credits(total_cost, description)
-                        db.session.commit()
-                        current_app.logger.info(f"积分扣除成功，剩余积分: {current_user.credits}")
-
-                        colors = random.choice([
-                            ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7"],
-                            ["#FF7675", "#74B9FF", "#00B894", "#FDCB6E", "#E17055"],
-                            ["#A8E6CF", "#FFD3B6", "#FFAAA5", "#FF8B94", "#C7CEEA"],
-                            ["#F4A261", "#E76F51", "#2A9D8F", "#E9C46A", "#264653"],
-                            ["#FFADAD", "#FFD6A5", "#FDFFB6", "#CAFFBF", "#9BF6FF"]
-                        ])
-
-                        return jsonify({
-                            "imageUrl": image_url,
-                            "colors": colors,
-                            "user": current_user.to_dict()
-                        }), 200
                     else:
-                        current_app.logger.warning(f"图片URL验证失败: {image_url}")
-                        if attempt == max_retries - 1:
-                            # 最后一次尝试失败，返回错误而不是占位符
-                            return jsonify({
-                                'error': '图片生成失败，请稍后重试。您的积分未被扣除。',
-                                'current_credits': current_user.credits,
-                                'required_credits': total_cost
-                            }), 503
-                        time.sleep(1)  # 重试前等待
-                        continue
+                        current_app.logger.warning(f"图片URL验证失败，但仍然尝试使用: {image_url}")
+                        # 降级策略：即使验证失败，仍然尝试使用URL
+                        # 让前端决定是否能够加载图片
+
+                    # 无论验证结果如何，都尝试返回图片（降级策略）
+                    current_app.logger.info("开始扣除积分")
+                    description = f"生成创作: {prompt[:50]}"
+                    current_user.consume_credits(total_cost, description)
+                    db.session.commit()
+                    current_app.logger.info(f"积分扣除成功，剩余积分: {current_user.credits}")
+
+                    colors = random.choice([
+                        ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7"],
+                        ["#FF7675", "#74B9FF", "#00B894", "#FDCB6E", "#E17055"],
+                        ["#A8E6CF", "#FFD3B6", "#FFAAA5", "#FF8B94", "#C7CEEA"],
+                        ["#F4A261", "#E76F51", "#2A9D8F", "#E9C46A", "#264653"],
+                        ["#FFADAD", "#FFD6A5", "#FDFFB6", "#CAFFBF", "#9BF6FF"]
+                    ])
+
+                    response_data = {
+                        "imageUrl": image_url,
+                        "colors": colors,
+                        "user": current_user.to_dict()
+                    }
+
+                    # 如果URL验证失败，添加警告信息
+                    if not url_is_valid:
+                        response_data["warning"] = "图片URL验证失败，但仍然尝试加载"
+
+                    return jsonify(response_data), 200
                 else:
                     current_app.logger.warning("未找到有效图片URL")
                     if attempt == max_retries - 1:
-                        # 最后一次尝试失败，返回错误而不是占位符
+                        # 最后一次尝试失败，返回错误
                         return jsonify({
-                            'error': '图片生成失败，请稍后重试。您的积分未被扣除。',
+                            'error': '图片生成失败：无法从API响应中提取图片URL。您的积分未被扣除。',
                             'current_credits': current_user.credits,
                             'required_credits': total_cost
                         }), 503
