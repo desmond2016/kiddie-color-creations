@@ -38,6 +38,15 @@ app.config['ADMIN_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1) # 管理员
 
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:////tmp/kiddie_color_creations.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# 优化数据库连接池配置以减少内存使用
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_size': 3,          # 减少连接池大小
+    'pool_recycle': 300,     # 5分钟回收连接
+    'pool_pre_ping': True,   # 连接前检查
+    'max_overflow': 0,       # 不允许超出连接池
+    'pool_timeout': 20       # 连接超时时间
+}
 app.config['ADMIN_USERNAME'] = os.getenv('ADMIN_USERNAME', 'admin')
 
 # --- 初始化扩展 ---

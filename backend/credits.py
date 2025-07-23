@@ -74,24 +74,38 @@ def extract_image_url_from_stream(content):
     try:
         current_app.logger.info(f"开始解析API响应内容，长度: {len(content)}")
         
-        # 方法1: 直接查找图片URL
+        # 方法1: 直接查找图片URL - 优化版
         url_patterns = [
-            r'https?://[^\s<>"\'\[\]{}\\|^`\n\r]+\.(?:jpg|jpeg|png|gif|webp)',
+            # 标准图片URL
+            r'https?://[^\s<>"\'\[\]{}\\|^`\n\r]+\.(?:jpg|jpeg|png|gif|webp|bmp)',
+            # OpenAI相关域名
             r'https?://[^\s<>"\'\[\]{}\\|^`\n\r]*openai\.com[^\s<>"\'\[\]{}\\|^`\n\r]+',
             r'https?://[^\s<>"\'\[\]{}\\|^`\n\r]*videos\.openai\.com[^\s<>"\'\[\]{}\\|^`\n\r]+',
+            # 其他可能的图片服务域名
+            r'https?://[^\s<>"\'\[\]{}\\|^`\n\r]*\.amazonaws\.com[^\s<>"\'\[\]{}\\|^`\n\r]+',
+            # 通用HTTPS URL（作为备选）
+            r'https://[^\s<>"\'\[\]{}\\|^`\n\r]{20,}',
         ]
-        
-        for pattern in url_patterns:
+
+        for i, pattern in enumerate(url_patterns):
+            current_app.logger.debug(f"尝试URL模式 {i+1}: {pattern}")
             urls = re.findall(pattern, content, re.IGNORECASE)
             if urls:
+                current_app.logger.info(f"模式 {i+1} 找到 {len(urls)} 个URL")
                 for url in urls:
                     try:
-                        decoded_url = urllib.parse.unquote(url)
+                        # 清理URL - 移除可能的尾部字符
+                        cleaned_url = url.rstrip('.,;!?)"\']}')
+                        decoded_url = urllib.parse.unquote(cleaned_url)
+
+                        # 验证URL格式
                         if decoded_url.startswith('http') and len(decoded_url) > 20:
-                            current_app.logger.info(f"找到图片URL: {decoded_url}")
-                            return decoded_url
+                            # 额外验证：确保不是文档或API端点
+                            if not any(ext in decoded_url.lower() for ext in ['.html', '.json', '.xml', '.txt']):
+                                current_app.logger.info(f"找到有效图片URL: {decoded_url}")
+                                return decoded_url
                     except Exception as e:
-                        current_app.logger.warning(f"URL解码失败: {e}")
+                        current_app.logger.warning(f"URL处理失败: {e}")
                         continue
         
         # 方法2: 解析JSON格式的响应
@@ -255,22 +269,30 @@ def generate_creation(current_user):
         
         current_app.logger.info(f"开始生成创作: {prompt}")
         
-        # 重试机制
-        max_retries = 2
+        # 重试机制 - 减少重试次数，增加超时时间
+        max_retries = 1
         for attempt in range(max_retries):
             try:
-                response = requests.post(api_endpoint, headers=headers, json=payload, timeout=30)
+                current_app.logger.info(f"开始API调用，尝试次数: {attempt + 1}/{max_retries}")
+                response = requests.post(api_endpoint, headers=headers, json=payload, timeout=90)
+                current_app.logger.info(f"API响应状态码: {response.status_code}")
+                current_app.logger.info(f"API响应内容长度: {len(response.text)}")
                 response.raise_for_status()
-                
+
+                current_app.logger.info("开始提取图片URL...")
                 image_url = extract_image_url_from_stream(response.text)
+                current_app.logger.info(f"提取到的图片URL: {image_url[:100] if image_url else 'None'}...")
                 
                 if image_url:
+                    current_app.logger.info("开始验证图片URL可访问性...")
                     # 验证URL是否可访问
                     if validate_image_url(image_url):
+                        current_app.logger.info("图片URL验证成功，开始扣除积分")
                         # 成功获取并验证图片，扣除积分
                         description = f"生成创作: {prompt[:50]}"
                         current_user.consume_credits(total_cost, description)
                         db.session.commit()
+                        current_app.logger.info(f"积分扣除成功，剩余积分: {current_user.credits}")
 
                         colors = random.choice([
                             ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7"],

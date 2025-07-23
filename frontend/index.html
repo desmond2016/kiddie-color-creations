@@ -677,6 +677,11 @@
                 console.log('开始生成创作，prompt:', prompt);
                 console.log('使用token:', authSystem.getAuthToken());
 
+                // 添加60秒超时提示
+                const timeoutWarning = setTimeout(() => {
+                    showMessage('error-message', '图片生成中，请耐心等待...（这可能需要1-2分钟）', 'warning');
+                }, 60000);
+
                 // 使用统一的创作生成API
                 const response = await fetch(CONFIG.API_BASE_URL + '/credits/generate-creation', {
                     method: 'POST',
@@ -805,12 +810,14 @@
                         authSystem.openModal('auth-modal');
                     }
                 } else if (error instanceof TypeError && error.message === 'Failed to fetch') {
-                    showMessage('error-message', '无法连接到后端服务，请确保后端正在运行且地址正确。', 'error');
+                    let errorMsg = '无法连接到后端服务。可能原因：<br>1. 后端服务正在启动中（首次访问需要1-2分钟）<br>2. 网络连接问题<br>3. 服务器暂时不可用';
+                    errorMsg += ' <button onclick="document.getElementById(\'generate-button\').click()" style="margin-left: 10px; padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">重试</button>';
+                    showMessage('error-message', errorMsg, 'error');
                 } else {
                     let errorMsg = `生成失败: ${error.message}`;
 
-                    // 如果是服务不可用错误，添加重试按钮
-                    if (error.message && (error.message.includes('服务暂时不可用') || error.message.includes('图片生成失败') || error.message.includes('请稍后重试'))) {
+                    // 为大多数错误添加重试按钮
+                    if (!error.message.includes('积分余额不足') && !error.message.includes('登录已过期')) {
                         errorMsg += ' <button onclick="document.getElementById(\'generate-button\').click()" style="margin-left: 10px; padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">重试</button>';
                     }
 
@@ -820,6 +827,11 @@
                 placeholderContent.style.display = 'flex';
                 mainImage.style.display = 'none';
                 } finally {
+                    // 清除超时提示
+                    if (timeoutWarning) {
+                        clearTimeout(timeoutWarning);
+                    }
+
                     loadingIndicator.style.display = 'none';
                     paletteLoadingIndicator.style.display = 'none';
                     mainImage.style.opacity = '1';

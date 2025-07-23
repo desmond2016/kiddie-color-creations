@@ -3,6 +3,7 @@
 图片代理服务 - 简化版URL处理
 """
 import os
+import io
 import requests
 import hashlib
 from datetime import datetime, timedelta
@@ -80,24 +81,19 @@ def proxy_image():
         if not decoded_url.startswith('http'):
             return jsonify({'error': '无效的URL格式'}), 400
         
-        # 获取缓存图片
-        cached_path = get_cached_image_path(decoded_url)
-        
-        if cached_path and os.path.exists(cached_path):
-            return send_file(cached_path, mimetype='image/png')
-        
-        # 直接代理
-        response = requests.get(decoded_url, timeout=10)
+        # 临时禁用缓存，直接代理以减少内存使用
+        current_app.logger.info(f"直接代理图片: {decoded_url}")
+
+        # 直接代理，不缓存
+        response = requests.get(decoded_url, timeout=15, stream=True)
         response.raise_for_status()
-        
-        # 保存到缓存
-        filename = get_cache_filename(decoded_url)
-        file_path = os.path.join(CACHE_DIR, filename)
-        
-        with open(file_path, 'wb') as f:
-            f.write(response.content)
-        
-        return send_file(file_path, mimetype='image/png')
+
+        # 流式返回，减少内存占用
+        return send_file(
+            io.BytesIO(response.content),
+            mimetype=response.headers.get('content-type', 'image/png'),
+            as_attachment=False
+        )
             
     except Exception as e:
         current_app.logger.error(f"图片代理错误: {e}")
