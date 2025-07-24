@@ -50,14 +50,11 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 app.config['ADMIN_USERNAME'] = os.getenv('ADMIN_USERNAME', 'admin')
 
 # --- 初始化扩展 ---
-CORS(app, 
-     origins=[
-         "https://kiddie-color-creations.pages.dev",
-         "http://localhost:5500", "http://127.0.0.1:5500",
-         "http://localhost:8000", "http://127.0.0.1:8000"
-     ], 
-     supports_credentials=True, 
-     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], 
+# 临时使用通配符CORS配置解决跨域问题
+CORS(app,
+     origins="*",  # 允许所有域名
+     supports_credentials=False,  # 通配符模式下必须设为False
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
      allow_headers=['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
      expose_headers=['Content-Type', 'Authorization'])
 db.init_app(app)
