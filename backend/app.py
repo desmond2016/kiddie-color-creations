@@ -56,12 +56,14 @@ app.config['ADMIN_USERNAME'] = os.getenv('ADMIN_USERNAME', 'admin')
 
 # --- 初始化扩展 ---
 # 临时使用通配符CORS配置解决跨域问题
-CORS(app,
+print("正在配置CORS...")
+cors = CORS(app,
      origins="*",  # 允许所有域名
      supports_credentials=False,  # 通配符模式下必须设为False
      methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
      allow_headers=['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
      expose_headers=['Content-Type', 'Authorization'])
+print("CORS配置完成")
 db.init_app(app)
 jwt = JWTManager(app)
 setup_jwt_error_handlers(jwt) # 注册自定义JWT错误处理器
@@ -72,6 +74,24 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(credits_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(image_proxy_bp)
+
+# --- CORS调试和备用处理 ---
+@app.before_request
+def before_request():
+    """请求前处理 - CORS调试"""
+    if request.method == 'OPTIONS':
+        print(f"OPTIONS请求: {request.url}")
+        print(f"Origin: {request.headers.get('Origin')}")
+
+@app.after_request
+def after_request(response):
+    """请求后处理 - 确保CORS头正确设置"""
+    # 手动添加CORS头作为备用
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept, X-Requested-With'
+    response.headers['Access-Control-Expose-Headers'] = 'Content-Type, Authorization'
+    return response
 
 # --- 数据库和初始数据设置 ---
 @app.cli.command("init-db-seed")

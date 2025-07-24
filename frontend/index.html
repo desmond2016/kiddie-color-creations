@@ -664,7 +664,7 @@
             const paletteLoadingIndicator = document.getElementById('palette-loading-indicator');
 
             // 定义超时警告变量
-            let timeoutWarning, warning30s;
+            let timeoutWarning, warning30s, warning60s;
 
             // 显示加载状态
             loadingIndicator.style.display = 'flex';
@@ -680,14 +680,18 @@
                 console.log('开始生成创作，prompt:', prompt);
                 console.log('使用token:', authSystem.getAuthToken());
 
-                // 添加30秒和60秒的进度提示
+                // 添加分阶段的进度提示
                 const warning30s = setTimeout(() => {
-                    showMessage('error-message', '图片生成中，请耐心等待...（通常需要30-60秒）', 'warning');
+                    showMessage('error-message', '图片生成中，请耐心等待...（通常需要60-120秒）', 'warning');
                 }, 30000);
 
-                timeoutWarning = setTimeout(() => {
+                const warning60s = setTimeout(() => {
                     showMessage('error-message', '图片生成中，即将完成...（请再等待片刻）', 'warning');
                 }, 60000);
+
+                timeoutWarning = setTimeout(() => {
+                    showMessage('error-message', '图片生成接近完成，请稍候...', 'warning');
+                }, 90000);
 
                 // 使用统一的创作生成API
                 const response = await fetch(CONFIG.API_BASE_URL + '/credits/generate-creation', {
@@ -898,6 +902,9 @@
                     // 清除所有超时提示
                     if (warning30s) {
                         clearTimeout(warning30s);
+                    }
+                    if (warning60s) {
+                        clearTimeout(warning60s);
                     }
                     if (timeoutWarning) {
                         clearTimeout(timeoutWarning);

@@ -243,8 +243,8 @@ def generate_creation(current_user):
         
         current_app.logger.info(f"开始生成创作: {prompt}")
         
-        # 重试机制 - 减少重试次数，增加超时时间
-        max_retries = 1
+        # 重试机制 - 增加重试次数应对API不稳定
+        max_retries = 2  # 增加到2次重试
         for attempt in range(max_retries):
             try:
                 print(f"开始API调用，尝试次数: {attempt + 1}/{max_retries}")
@@ -254,9 +254,9 @@ def generate_creation(current_user):
                 import time
                 start_time = time.time()
 
-                # 使用简单的requests调用，增加超时时间
+                # 使用简单的requests调用，增加超时时间到120秒
                 print("正在调用OpenAI API...")
-                response = requests.post(api_endpoint, headers=headers, json=payload, timeout=90)
+                response = requests.post(api_endpoint, headers=headers, json=payload, timeout=120)
                 print("API调用完成")
 
                 # 记录API调用耗时
@@ -337,13 +337,19 @@ def generate_creation(current_user):
                     continue
                     
             except requests.exceptions.Timeout:
+                print(f"API超时，尝试 {attempt + 1}/{max_retries}")
+                current_app.logger.error(f"API请求超时 (尝试 {attempt + 1}/{max_retries})")
                 if attempt == max_retries - 1:
                     return jsonify({
-                        'error': '图片生成超时，请稍后重试',
+                        'error': f'图片生成超时（已重试{max_retries}次），OpenAI服务响应较慢，请稍后重试。您的积分未被扣除。',
                         'current_credits': current_user.credits,
                         'required_credits': total_cost
                     }), 504
-                time.sleep(1)
+                # 指数退避：第一次重试等待5秒，第二次等待10秒
+                wait_time = 5 * (attempt + 1)
+                print(f"等待{wait_time}秒后重试...")
+                current_app.logger.info(f"等待{wait_time}秒后重试...")
+                time.sleep(wait_time)
                 continue
             except requests.exceptions.RequestException as e:
                 if attempt == max_retries - 1:
