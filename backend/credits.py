@@ -166,7 +166,7 @@ def extract_image_url_from_stream(content):
 
             current_app.logger.info("JSON解析成功但未找到图片URL，继续使用正则表达式")
 
-        except json.JSONDecodeError:
+        except ValueError:  # json.JSONDecodeError 是 ValueError 的子类
             current_app.logger.info("不是有效的JSON格式，使用正则表达式解析")
         except Exception as e:
             current_app.logger.warning(f"JSON解析出错: {e}")
@@ -219,7 +219,7 @@ def extract_image_url_from_stream(content):
             if line.startswith('data: ') and line != 'data: [DONE]':
                 try:
                     json_str = line[6:]
-                    import json
+                    # 使用已导入的json模块
                     chunk_data = json.loads(json_str)
                     
                     if 'choices' in chunk_data and len(chunk_data['choices']) > 0:
@@ -234,7 +234,7 @@ def extract_image_url_from_stream(content):
                                         current_app.logger.info(f"从JSON内容中找到图片URL: {decoded_url}")
                                         return decoded_url
                                             
-                except (json.JSONDecodeError, KeyError, IndexError):
+                except (ValueError, KeyError, IndexError):  # ValueError包含JSONDecodeError
                     continue
         
         # 方法3: 查找所有URL并评分
@@ -409,7 +409,14 @@ def generate_creation(current_user):
         for attempt in range(max_retries):
             try:
                 current_app.logger.info(f"开始API调用，尝试次数: {attempt + 1}/{max_retries}")
-                response = requests.post(api_endpoint, headers=headers, json=payload, timeout=90)
+                # 避免json参数名冲突，使用data参数并手动序列化
+                import json as json_module
+                response = requests.post(
+                    api_endpoint,
+                    headers=headers,
+                    data=json_module.dumps(payload),
+                    timeout=90
+                )
                 current_app.logger.info(f"API响应状态码: {response.status_code}")
                 current_app.logger.info(f"API响应内容长度: {len(response.text)}")
 
