@@ -187,8 +187,10 @@ def generate_placeholder_svg(prompt):
 @auth_required
 def generate_creation(current_user):
     """稳定版：原子化地生成图片和配色方案"""
+    print("=== 开始处理图片生成请求 ===")  # 使用print确保输出
     data = request.get_json()
     prompt = data.get('prompt', '').strip()
+    print(f"收到请求，prompt: {prompt}")
     
     if not prompt:
         return jsonify({"error": "请输入图片描述"}), 400
@@ -220,8 +222,9 @@ def generate_creation(current_user):
             }), 500
 
         # 记录API密钥的前几位（用于调试，不泄露完整密钥）
+        print(f"使用API密钥: {api_key[:10]}...{api_key[-4:]}")
         current_app.logger.info(f"使用API密钥: {api_key[:10]}...{api_key[-4:]}")
-            
+
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}"
@@ -244,14 +247,17 @@ def generate_creation(current_user):
         max_retries = 1
         for attempt in range(max_retries):
             try:
+                print(f"开始API调用，尝试次数: {attempt + 1}/{max_retries}")
                 current_app.logger.info(f"开始API调用，尝试次数: {attempt + 1}/{max_retries}")
 
                 # 添加开始时间记录
                 import time
                 start_time = time.time()
 
-                # 使用简单的requests调用，减少超时时间
-                response = requests.post(api_endpoint, headers=headers, json=payload, timeout=30)
+                # 使用简单的requests调用，增加超时时间
+                print("正在调用OpenAI API...")
+                response = requests.post(api_endpoint, headers=headers, json=payload, timeout=90)
+                print("API调用完成")
 
                 # 记录API调用耗时
                 end_time = time.time()

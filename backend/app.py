@@ -19,6 +19,11 @@ load_dotenv()
 # --- Flask 应用设置 ---
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
+# 配置日志级别
+import logging
+logging.basicConfig(level=logging.INFO)
+app.logger.setLevel(logging.INFO)
+
 # --- 配置 ---
 # 从环境变量加载，提供默认值
 def get_env_variable(name, default=None):
