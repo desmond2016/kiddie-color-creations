@@ -1066,8 +1066,12 @@
             const currentUserData = authSystem.getCurrentUser();
 
             try {
+                // 构建代理URL，与显示图片使用相同的代理机制
+                const proxyUrl = `${CONFIG.API_BASE_URL}/proxy/image?url=${encodeURIComponent(currentImageData.url)}`;
+                console.log('使用代理URL下载:', proxyUrl);
+
                 // 使用fetch获取图片数据，避免直接导航
-                const response = await fetch(currentImageData.url);
+                const response = await fetch(proxyUrl);
                 const blob = await response.blob();
 
                 // 创建Blob URL
@@ -1093,9 +1097,12 @@
             } catch (error) {
                 console.error('下载失败，使用备用方法:', error);
 
-                // 备用方法：直接使用原URL
+                // 备用方法：使用代理URL直接下载
+                const proxyUrl = `${CONFIG.API_BASE_URL}/proxy/image?url=${encodeURIComponent(currentImageData.url)}`;
+                console.log('备用方法使用代理URL:', proxyUrl);
+
                 const tempLink = document.createElement('a');
-                tempLink.href = currentImageData.url;
+                tempLink.href = proxyUrl;
                 tempLink.download = currentImageData.filename || 'ColoringPage.png';
                 tempLink.target = '_blank';  // 在新窗口打开，避免影响当前页面
                 tempLink.style.display = 'none';
