@@ -4,6 +4,7 @@
 """
 from flask import Blueprint, request, jsonify, current_app
 import os
+import json
 import requests
 import traceback
 import random
@@ -64,17 +65,112 @@ def require_credits(service_type):
         return wrapper
     return decorator
 
+# --- 辅助函数 ---
+def clean_extracted_url(url):
+    """清理提取到的URL"""
+    if not url:
+        return None
+
+    # 移除可能的前缀和后缀
+    url = url.strip()
+    # 移除引号
+    url = url.strip('"\'')
+    # 移除可能的转义字符
+    url = url.replace('\\', '')
+    # 移除可能的尾部字符
+    url = url.rstrip('.,;!?)"\']}')
+
+    return url
+
+def extract_url_from_text(text):
+    """从文本中提取URL"""
+    if not text:
+        return None
+
+    # 使用正则表达式查找URL
+    url_pattern = r'https?://[^\s<>"\'\[\]{}\\|^`\n\r]+'
+    urls = re.findall(url_pattern, text, re.IGNORECASE)
+
+    for url in urls:
+        cleaned_url = clean_extracted_url(url)
+        if cleaned_url and len(cleaned_url) > 20:
+            return cleaned_url
+
+    return None
+
+def is_valid_url_format(url):
+    """检查URL格式是否有效"""
+    if not url:
+        return False
+
+    return (
+        url.startswith('http') and
+        len(url) > 20 and
+        not any(char in url for char in ['<', '>', '"', "'", '\\', ' ']) and
+        '.' in url
+    )
+
 # --- 增强版URL提取 ---
 def extract_image_url_from_stream(content):
     """增强版：从流式响应中提取图片URL"""
     if not content:
         current_app.logger.warning("API响应内容为空")
         return None
-    
+
     try:
         current_app.logger.info(f"开始解析API响应内容，长度: {len(content)}")
-        
-        # 方法1: 直接查找图片URL - 优化版
+
+        # 方法1: 尝试JSON解析（新增）
+        try:
+            current_app.logger.info("尝试JSON解析...")
+            json_response = json.loads(content)
+            current_app.logger.info(f"JSON解析成功，结构: {type(json_response)}")
+
+            # 查找常见的图片URL字段
+            url_fields = ['url', 'image_url', 'imageUrl', 'image', 'src']
+
+            # 如果是字典，直接查找
+            if isinstance(json_response, dict):
+                for field in url_fields:
+                    if field in json_response and json_response[field]:
+                        url = json_response[field]
+                        if isinstance(url, str) and url.startswith('http'):
+                            current_app.logger.info(f"从JSON字段'{field}'找到URL: {url}")
+                            return clean_extracted_url(url)
+
+                # 查找data数组
+                if 'data' in json_response and isinstance(json_response['data'], list):
+                    for item in json_response['data']:
+                        if isinstance(item, dict):
+                            for field in url_fields:
+                                if field in item and item[field]:
+                                    url = item[field]
+                                    if isinstance(url, str) and url.startswith('http'):
+                                        current_app.logger.info(f"从JSON data[].{field}找到URL: {url}")
+                                        return clean_extracted_url(url)
+
+                # 查找choices数组（ChatGPT格式）
+                if 'choices' in json_response and isinstance(json_response['choices'], list):
+                    for choice in json_response['choices']:
+                        if isinstance(choice, dict) and 'message' in choice:
+                            message = choice['message']
+                            if isinstance(message, dict) and 'content' in message:
+                                # 在message content中查找URL
+                                content_text = message['content']
+                                if isinstance(content_text, str):
+                                    url = extract_url_from_text(content_text)
+                                    if url:
+                                        current_app.logger.info(f"从choices[].message.content找到URL: {url}")
+                                        return clean_extracted_url(url)
+
+            current_app.logger.info("JSON解析成功但未找到图片URL，继续使用正则表达式")
+
+        except json.JSONDecodeError:
+            current_app.logger.info("不是有效的JSON格式，使用正则表达式解析")
+        except Exception as e:
+            current_app.logger.warning(f"JSON解析出错: {e}")
+
+        # 方法2: 直接查找图片URL - 优化版（原有逻辑）
         url_patterns = [
             # 标准图片URL
             r'https?://[^\s<>"\'\[\]{}\\|^`\n\r]+\.(?:jpg|jpeg|png|gif|webp|bmp)',
@@ -94,16 +190,23 @@ def extract_image_url_from_stream(content):
                 current_app.logger.info(f"模式 {i+1} 找到 {len(urls)} 个URL")
                 for url in urls:
                     try:
-                        # 清理URL - 移除可能的尾部字符
-                        cleaned_url = url.rstrip('.,;!?)"\']}')
+                        # 使用改进的URL清理函数
+                        cleaned_url = clean_extracted_url(url)
+                        if not cleaned_url:
+                            continue
+
                         decoded_url = urllib.parse.unquote(cleaned_url)
 
-                        # 验证URL格式
-                        if decoded_url.startswith('http') and len(decoded_url) > 20:
+                        # 使用改进的URL格式验证
+                        if is_valid_url_format(decoded_url):
                             # 额外验证：确保不是文档或API端点
                             if not any(ext in decoded_url.lower() for ext in ['.html', '.json', '.xml', '.txt']):
                                 current_app.logger.info(f"找到有效图片URL: {decoded_url}")
                                 return decoded_url
+                            else:
+                                current_app.logger.debug(f"跳过文档类型URL: {decoded_url}")
+                        else:
+                            current_app.logger.debug(f"URL格式验证失败: {decoded_url}")
                     except Exception as e:
                         current_app.logger.warning(f"URL处理失败: {e}")
                         continue
@@ -165,9 +268,10 @@ def extract_image_url_from_stream(content):
         
         current_app.logger.warning("未找到任何有效的图片URL")
         return None
-        
+
     except Exception as e:
         current_app.logger.error(f"提取图片URL时发生异常: {e}")
+        traceback.print_exc()
         return None
 
 # --- URL验证和重试机制 ---
@@ -307,11 +411,22 @@ def generate_creation(current_user):
                 response = requests.post(api_endpoint, headers=headers, json=payload, timeout=90)
                 current_app.logger.info(f"API响应状态码: {response.status_code}")
                 current_app.logger.info(f"API响应内容长度: {len(response.text)}")
+
+                # 记录完整的API响应内容（用于调试）
+                current_app.logger.info("=== 完整API响应内容开始 ===")
+                current_app.logger.info(response.text)
+                current_app.logger.info("=== 完整API响应内容结束 ===")
+
                 response.raise_for_status()
 
                 current_app.logger.info("开始提取图片URL...")
                 image_url = extract_image_url_from_stream(response.text)
                 current_app.logger.info(f"提取到的图片URL: {image_url[:100] if image_url else 'None'}...")
+
+                # 添加URL有效性检查
+                if image_url and not is_valid_url_format(image_url):
+                    current_app.logger.error(f"提取到的URL格式无效: {image_url}")
+                    image_url = None
                 
                 if image_url:
                     current_app.logger.info("开始验证图片URL可访问性...")
@@ -354,11 +469,20 @@ def generate_creation(current_user):
                 else:
                     current_app.logger.warning("未找到有效图片URL")
                     if attempt == max_retries - 1:
-                        # 最后一次尝试失败，返回错误
+                        # 最后一次尝试失败，返回详细错误信息
+                        error_msg = '图片生成失败：无法从API响应中提取有效的图片URL。'
+                        if len(response.text) > 0:
+                            error_msg += f' API响应长度: {len(response.text)} 字符。'
+                        error_msg += ' 您的积分未被扣除。'
+
                         return jsonify({
-                            'error': '图片生成失败：无法从API响应中提取图片URL。您的积分未被扣除。',
+                            'error': error_msg,
                             'current_credits': current_user.credits,
-                            'required_credits': total_cost
+                            'required_credits': total_cost,
+                            'debug_info': {
+                                'response_length': len(response.text),
+                                'response_preview': response.text[:200] if response.text else 'Empty'
+                            }
                         }), 503
                     time.sleep(1)
                     continue
