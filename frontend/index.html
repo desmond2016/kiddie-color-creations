@@ -742,7 +742,10 @@
                         filename: `ColoringPage_${prompt.replace(/[^a-z0-9]/gi, '_').substring(0, 20)}.png`
                     };
 
-                    mainImage.src = data.imageUrl;
+                    // 使用后端图片代理避免直接访问OpenAI URL
+                    const proxyUrl = `${CONFIG.API_BASE_URL}/image-proxy/image?url=${encodeURIComponent(data.imageUrl)}`;
+                    console.log('使用代理URL:', proxyUrl);
+                    mainImage.src = proxyUrl;
                     mainImage.alt = `线条画: ${prompt}`;
                     
                     // 添加图片加载错误处理
@@ -754,13 +757,20 @@
                     };
                     
                     mainImage.onerror = function() {
-                        console.error('图片加载失败:', data.imageUrl);
-                        
-                        // 尝试URL解码
+                        console.error('图片加载失败，当前URL:', mainImage.src);
+
+                        // 如果当前使用的是代理URL，尝试直接访问原URL
+                        if (mainImage.src.includes('/image-proxy/')) {
+                            console.log('代理加载失败，尝试直接访问原URL:', data.imageUrl);
+                            mainImage.src = data.imageUrl;
+                            return;
+                        }
+
+                        // 如果直接访问也失败，尝试URL解码
                         try {
                             const decodedUrl = decodeURIComponent(data.imageUrl);
                             console.log('尝试解码URL:', decodedUrl);
-                            if (decodedUrl !== data.imageUrl) {
+                            if (decodedUrl !== data.imageUrl && !mainImage.src.includes(decodedUrl)) {
                                 console.log('使用解码后的URL重试');
                                 mainImage.src = decodedUrl;
                                 return;
@@ -768,9 +778,10 @@
                         } catch (error) {
                             console.error('URL解码失败:', error);
                         }
-                        
-                        // 图片加载失败时的处理
-                        showMessage('error-message', '图片加载失败，请稍后重试', 'error');
+
+                        // 所有尝试都失败，显示错误信息
+                        console.error('所有图片加载尝试都失败');
+                        showMessage('error-message', '图片加载失败，可能是网络连接问题。请稍后重试。', 'error');
                         placeholderContent.style.display = 'flex';
                         mainImage.style.display = 'none';
                         downloadLink.style.display = 'none';

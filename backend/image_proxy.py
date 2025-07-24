@@ -84,8 +84,15 @@ def proxy_image():
         # 临时禁用缓存，直接代理以减少内存使用
         current_app.logger.info(f"直接代理图片: {decoded_url}")
 
-        # 直接代理，不缓存
-        response = requests.get(decoded_url, timeout=15, stream=True)
+        # 直接代理，不缓存，添加适当的请求头
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (compatible; ImageProxy/1.0)',
+            'Accept': 'image/*,*/*;q=0.8',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive'
+        }
+
+        response = requests.get(decoded_url, timeout=30, stream=True, headers=headers)
         response.raise_for_status()
 
         # 流式返回，减少内存占用
