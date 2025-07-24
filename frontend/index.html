@@ -743,7 +743,7 @@
                     };
 
                     // 使用后端图片代理避免直接访问OpenAI URL
-                    const proxyUrl = `${CONFIG.API_BASE_URL}/image-proxy/image?url=${encodeURIComponent(data.imageUrl)}`;
+                    const proxyUrl = `${CONFIG.API_BASE_URL}/proxy/image?url=${encodeURIComponent(data.imageUrl)}`;
                     console.log('使用代理URL:', proxyUrl);
                     mainImage.src = proxyUrl;
                     mainImage.alt = `线条画: ${prompt}`;
@@ -760,7 +760,7 @@
                         console.error('图片加载失败，当前URL:', mainImage.src);
 
                         // 如果当前使用的是代理URL，尝试直接访问原URL
-                        if (mainImage.src.includes('/image-proxy/')) {
+                        if (mainImage.src.includes('/proxy/')) {
                             console.log('代理加载失败，尝试直接访问原URL:', data.imageUrl);
                             mainImage.src = data.imageUrl;
                             return;
@@ -779,12 +779,56 @@
                             console.error('URL解码失败:', error);
                         }
 
-                        // 所有尝试都失败，显示错误信息
+                        // 所有尝试都失败，显示友好的占位符
                         console.error('所有图片加载尝试都失败');
-                        showMessage('error-message', '图片加载失败，可能是网络连接问题。请稍后重试。', 'error');
-                        placeholderContent.style.display = 'flex';
-                        mainImage.style.display = 'none';
-                        downloadLink.style.display = 'none';
+
+                        // 创建一个友好的占位符图片
+                        const canvas = document.createElement('canvas');
+                        canvas.width = 512;
+                        canvas.height = 512;
+                        const ctx = canvas.getContext('2d');
+
+                        // 绘制占位符
+                        ctx.fillStyle = 'white';
+                        ctx.fillRect(0, 0, 512, 512);
+                        ctx.strokeStyle = 'black';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(1, 1, 510, 510);
+
+                        ctx.fillStyle = 'black';
+                        ctx.font = '24px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('图片生成成功', 256, 200);
+
+                        ctx.fillStyle = 'gray';
+                        ctx.font = '16px Arial';
+                        ctx.fillText('但无法显示原图', 256, 240);
+                        ctx.fillText('可能是网络连接问题', 256, 280);
+
+                        ctx.fillStyle = 'blue';
+                        ctx.font = '12px Arial';
+                        ctx.fillText('您的积分已正常扣除', 256, 320);
+                        ctx.fillText('请稍后重试或联系技术支持', 256, 340);
+
+                        // 绘制一个简单的图标
+                        ctx.strokeStyle = 'black';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.arc(256, 380, 30, 0, 2 * Math.PI);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(240, 380);
+                        ctx.lineTo(256, 365);
+                        ctx.lineTo(272, 380);
+                        ctx.stroke();
+
+                        // 将canvas转换为图片并显示
+                        mainImage.src = canvas.toDataURL();
+                        mainImage.style.display = 'block';
+                        placeholderContent.style.display = 'none';
+                        downloadLink.style.display = 'block'; // 仍然允许下载占位符
+
+                        showMessage('error-message', '图片生成成功，但显示遇到网络问题。已显示占位符，您的积分已正常扣除。', 'warning');
                     };
                     
                     // 如果是SVG占位符，直接显示

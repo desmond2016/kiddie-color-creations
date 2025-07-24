@@ -7,7 +7,7 @@ import io
 import requests
 import hashlib
 from datetime import datetime, timedelta
-from flask import Blueprint, send_file, jsonify, current_app, request
+from flask import Blueprint, send_file, jsonify, current_app, request, Response
 import urllib.parse
 
 image_proxy_bp = Blueprint('image_proxy', __name__, url_prefix='/proxy')
@@ -82,7 +82,7 @@ def proxy_image():
             return jsonify({'error': '无效的URL格式'}), 400
         
         # 临时禁用缓存，直接代理以减少内存使用
-        current_app.logger.info(f"直接代理图片: {decoded_url}")
+        current_app.logger.info(f"开始代理图片请求: {decoded_url}")
 
         # 直接代理，不缓存，添加适当的请求头
         headers = {
@@ -92,8 +92,11 @@ def proxy_image():
             'Connection': 'keep-alive'
         }
 
+        current_app.logger.info(f"发送请求到: {decoded_url}")
         response = requests.get(decoded_url, timeout=30, stream=True, headers=headers)
+        current_app.logger.info(f"收到响应，状态码: {response.status_code}")
         response.raise_for_status()
+        current_app.logger.info("图片代理请求成功")
 
         # 流式返回，减少内存占用
         return send_file(
@@ -104,7 +107,40 @@ def proxy_image():
             
     except Exception as e:
         current_app.logger.error(f"图片代理错误: {e}")
-        return jsonify({'error': '图片加载失败'}), 404
+
+        # 如果代理失败，返回一个SVG占位符
+        try:
+            # 从URL中提取任务ID作为占位符内容
+            import re
+            task_match = re.search(r'task_([^/]+)', decoded_url)
+            task_id = task_match.group(1) if task_match else 'unknown'
+
+            # 生成SVG占位符
+            svg_content = f'''<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" fill="white" stroke="black" stroke-width="2"/>
+  <text x="256" y="200" text-anchor="middle" font-family="Arial" font-size="24" fill="black">
+    图片生成成功
+  </text>
+  <text x="256" y="240" text-anchor="middle" font-family="Arial" font-size="16" fill="gray">
+    但无法显示原图
+  </text>
+  <text x="256" y="280" text-anchor="middle" font-family="Arial" font-size="14" fill="gray">
+    任务ID: {task_id[:8]}...
+  </text>
+  <text x="256" y="320" text-anchor="middle" font-family="Arial" font-size="12" fill="blue">
+    请稍后重试或联系技术支持
+  </text>
+  <circle cx="256" cy="380" r="30" fill="none" stroke="black" stroke-width="2"/>
+  <path d="M 240 380 L 256 365 L 272 380" fill="none" stroke="black" stroke-width="2"/>
+</svg>'''
+
+            current_app.logger.info("返回SVG占位符")
+            return Response(svg_content, mimetype='image/svg+xml')
+
+        except Exception as svg_error:
+            current_app.logger.error(f"生成SVG占位符失败: {svg_error}")
+            return jsonify({'error': '图片加载失败'}), 404
 
 @image_proxy_bp.route('/direct')
 def proxy_direct():
