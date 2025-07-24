@@ -65,54 +65,12 @@ def require_credits(service_type):
         return wrapper
     return decorator
 
-# --- 辅助函数 ---
-def clean_extracted_url(url):
-    """清理提取到的URL"""
-    if not url:
-        return None
+# --- 简化的辅助函数 ---
+# 移除了复杂的辅助函数，保持代码简单
 
-    # 移除可能的前缀和后缀
-    url = url.strip()
-    # 移除引号
-    url = url.strip('"\'')
-    # 移除可能的转义字符
-    url = url.replace('\\', '')
-    # 移除可能的尾部字符
-    url = url.rstrip('.,;!?)"\']}')
-
-    return url
-
-def extract_url_from_text(text):
-    """从文本中提取URL"""
-    if not text:
-        return None
-
-    # 使用正则表达式查找URL
-    url_pattern = r'https?://[^\s<>"\'\[\]{}\\|^`\n\r]+'
-    urls = re.findall(url_pattern, text, re.IGNORECASE)
-
-    for url in urls:
-        cleaned_url = clean_extracted_url(url)
-        if cleaned_url and len(cleaned_url) > 20:
-            return cleaned_url
-
-    return None
-
-def is_valid_url_format(url):
-    """检查URL格式是否有效"""
-    if not url:
-        return False
-
-    return (
-        url.startswith('http') and
-        len(url) > 20 and
-        not any(char in url for char in ['<', '>', '"', "'", '\\', ' ']) and
-        '.' in url
-    )
-
-# --- 增强版URL提取 ---
+# --- 简化版URL提取 ---
 def extract_image_url_from_stream(content):
-    """增强版：从流式响应中提取图片URL"""
+    """简化版：从API响应中提取第一个图片URL"""
     if not content:
         current_app.logger.warning("API响应内容为空")
         return None
@@ -120,154 +78,29 @@ def extract_image_url_from_stream(content):
     try:
         current_app.logger.info(f"开始解析API响应内容，长度: {len(content)}")
 
-        # 方法1: 尝试JSON解析（新增）
-        try:
-            current_app.logger.info("尝试JSON解析...")
-            # 使用json模块解析，避免变量名冲突
-            parsed_json = json.loads(content)
-            current_app.logger.info(f"JSON解析成功，结构: {type(parsed_json)}")
+        # 最简单的正则表达式：按文本顺序查找第一个图片URL
+        # 优先查找OpenAI域名的URL（因为我们知道这是正确的）
+        openai_pattern = r'https://videos\.openai\.com/[^\s<>"\'\[\]{}\\|^`\n\r]+'
+        openai_urls = re.findall(openai_pattern, content, re.IGNORECASE)
 
-            # 查找常见的图片URL字段
-            url_fields = ['url', 'image_url', 'imageUrl', 'image', 'src']
+        if openai_urls:
+            # 直接返回第一个OpenAI URL（这是我们要的第一张图片）
+            first_url = openai_urls[0].rstrip('.,;!?)"\']}')
+            current_app.logger.info(f"找到OpenAI图片URL: {first_url}")
+            return first_url
 
-            # 如果是字典，直接查找
-            if isinstance(parsed_json, dict):
-                for field in url_fields:
-                    if field in parsed_json and parsed_json[field]:
-                        url = parsed_json[field]
-                        if isinstance(url, str) and url.startswith('http'):
-                            current_app.logger.info(f"从JSON字段'{field}'找到URL: {url}")
-                            return clean_extracted_url(url)
+        # 如果没有找到OpenAI URL，尝试通用图片URL模式
+        general_pattern = r'https?://[^\s<>"\'\[\]{}\\|^`\n\r]+\.(?:jpg|jpeg|png|gif|webp|bmp)'
+        general_urls = re.findall(general_pattern, content, re.IGNORECASE)
 
-                # 查找data数组
-                if 'data' in parsed_json and isinstance(parsed_json['data'], list):
-                    for item in parsed_json['data']:
-                        if isinstance(item, dict):
-                            for field in url_fields:
-                                if field in item and item[field]:
-                                    url = item[field]
-                                    if isinstance(url, str) and url.startswith('http'):
-                                        current_app.logger.info(f"从JSON data[].{field}找到URL: {url}")
-                                        return clean_extracted_url(url)
+        if general_urls:
+            # 返回第一个找到的图片URL
+            first_url = general_urls[0].rstrip('.,;!?)"\']}')
+            current_app.logger.info(f"找到通用图片URL: {first_url}")
+            return first_url
 
-                # 查找choices数组（ChatGPT格式）
-                if 'choices' in parsed_json and isinstance(parsed_json['choices'], list):
-                    for choice in parsed_json['choices']:
-                        if isinstance(choice, dict) and 'message' in choice:
-                            message = choice['message']
-                            if isinstance(message, dict) and 'content' in message:
-                                # 在message content中查找URL
-                                content_text = message['content']
-                                if isinstance(content_text, str):
-                                    url = extract_url_from_text(content_text)
-                                    if url:
-                                        current_app.logger.info(f"从choices[].message.content找到URL: {url}")
-                                        return clean_extracted_url(url)
-
-            current_app.logger.info("JSON解析成功但未找到图片URL，继续使用正则表达式")
-
-        except ValueError:  # json.JSONDecodeError 是 ValueError 的子类
-            current_app.logger.info("不是有效的JSON格式，使用正则表达式解析")
-        except Exception as e:
-            current_app.logger.warning(f"JSON解析出错: {e}")
-
-        # 方法2: 直接查找图片URL - 优化版（原有逻辑）
-        url_patterns = [
-            # 标准图片URL
-            r'https?://[^\s<>"\'\[\]{}\\|^`\n\r]+\.(?:jpg|jpeg|png|gif|webp|bmp)',
-            # OpenAI相关域名
-            r'https?://[^\s<>"\'\[\]{}\\|^`\n\r]*openai\.com[^\s<>"\'\[\]{}\\|^`\n\r]+',
-            r'https?://[^\s<>"\'\[\]{}\\|^`\n\r]*videos\.openai\.com[^\s<>"\'\[\]{}\\|^`\n\r]+',
-            # 其他可能的图片服务域名
-            r'https?://[^\s<>"\'\[\]{}\\|^`\n\r]*\.amazonaws\.com[^\s<>"\'\[\]{}\\|^`\n\r]+',
-            # 通用HTTPS URL（作为备选）
-            r'https://[^\s<>"\'\[\]{}\\|^`\n\r]{20,}',
-        ]
-
-        for i, pattern in enumerate(url_patterns):
-            current_app.logger.debug(f"尝试URL模式 {i+1}: {pattern}")
-            urls = re.findall(pattern, content, re.IGNORECASE)
-            if urls:
-                current_app.logger.info(f"模式 {i+1} 找到 {len(urls)} 个URL")
-                for url in urls:
-                    try:
-                        # 使用改进的URL清理函数
-                        cleaned_url = clean_extracted_url(url)
-                        if not cleaned_url:
-                            continue
-
-                        decoded_url = urllib.parse.unquote(cleaned_url)
-
-                        # 使用改进的URL格式验证
-                        if is_valid_url_format(decoded_url):
-                            # 额外验证：确保不是文档或API端点
-                            if not any(ext in decoded_url.lower() for ext in ['.html', '.json', '.xml', '.txt']):
-                                current_app.logger.info(f"找到有效图片URL: {decoded_url}")
-                                return decoded_url
-                            else:
-                                current_app.logger.debug(f"跳过文档类型URL: {decoded_url}")
-                        else:
-                            current_app.logger.debug(f"URL格式验证失败: {decoded_url}")
-                    except Exception as e:
-                        current_app.logger.warning(f"URL处理失败: {e}")
-                        continue
-        
-        # 方法2: 解析JSON格式的响应
-        lines = content.split('\n')
-        for line in lines:
-            line = line.strip()
-            if line.startswith('data: ') and line != 'data: [DONE]':
-                try:
-                    json_str = line[6:]
-                    # 使用已导入的json模块
-                    chunk_data = json.loads(json_str)
-                    
-                    if 'choices' in chunk_data and len(chunk_data['choices']) > 0:
-                        choice = chunk_data['choices'][0]
-                        if 'delta' in choice and 'content' in choice['delta']:
-                            content_text = choice['delta']['content']
-                            if content_text:
-                                for pattern in url_patterns:
-                                    urls = re.findall(pattern, content_text, re.IGNORECASE)
-                                    if urls:
-                                        decoded_url = urllib.parse.unquote(urls[0])
-                                        current_app.logger.info(f"从JSON内容中找到图片URL: {decoded_url}")
-                                        return decoded_url
-                                            
-                except (ValueError, KeyError, IndexError):  # ValueError包含JSONDecodeError
-                    continue
-        
-        # 方法3: 查找所有URL并评分
-        all_url_pattern = r'https?://[^\s<>"\'\[\]{}\\|^`\n\r]+'
-        all_urls = re.findall(all_url_pattern, content)
-        
-        priority_keywords = ['image', 'png', 'jpg', 'jpeg', 'openai', 'cdn', 'assets']
-        scored_urls = []
-        
-        for url in all_urls:
-            try:
-                decoded_url = urllib.parse.unquote(url)
-                score = 0
-                
-                for keyword in priority_keywords:
-                    if keyword in decoded_url.lower():
-                        score += 10
-                
-                if any(ext in decoded_url.lower() for ext in ['.png', '.jpg', '.jpeg', '.gif', '.webp']):
-                    score += 20
-                
-                scored_urls.append((score, decoded_url))
-                
-            except Exception:
-                continue
-        
-        if scored_urls:
-            scored_urls.sort(key=lambda x: x[0], reverse=True)
-            best_url = scored_urls[0][1]
-            current_app.logger.info(f"选择最高分的图片URL: {best_url}")
-            return best_url
-        
-        current_app.logger.warning("未找到任何有效的图片URL")
+        # 如果都没找到，记录警告
+        current_app.logger.warning("未找到任何图片URL")
         return None
 
     except Exception as e:
@@ -409,21 +242,13 @@ def generate_creation(current_user):
         for attempt in range(max_retries):
             try:
                 current_app.logger.info(f"开始API调用，尝试次数: {attempt + 1}/{max_retries}")
-                # 避免json参数名冲突，使用data参数并手动序列化
-                import json as json_module
-                response = requests.post(
-                    api_endpoint,
-                    headers=headers,
-                    data=json_module.dumps(payload),
-                    timeout=90
-                )
+                # 使用简单的requests调用
+                response = requests.post(api_endpoint, headers=headers, json=payload, timeout=90)
                 current_app.logger.info(f"API响应状态码: {response.status_code}")
                 current_app.logger.info(f"API响应内容长度: {len(response.text)}")
 
-                # 记录完整的API响应内容（用于调试）
-                current_app.logger.info("=== 完整API响应内容开始 ===")
-                current_app.logger.info(response.text)
-                current_app.logger.info("=== 完整API响应内容结束 ===")
+                # 记录API响应长度（避免日志过长）
+                current_app.logger.info(f"API响应内容预览: {response.text[:200]}...")
 
                 response.raise_for_status()
 
@@ -431,10 +256,7 @@ def generate_creation(current_user):
                 image_url = extract_image_url_from_stream(response.text)
                 current_app.logger.info(f"提取到的图片URL: {image_url[:100] if image_url else 'None'}...")
 
-                # 添加URL有效性检查
-                if image_url and not is_valid_url_format(image_url):
-                    current_app.logger.error(f"提取到的URL格式无效: {image_url}")
-                    image_url = None
+                # 简化：直接使用提取到的URL（已经过基本清理）
                 
                 if image_url:
                     current_app.logger.info("开始验证图片URL可访问性...")
