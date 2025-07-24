@@ -218,6 +218,9 @@ def generate_creation(current_user):
                 'current_credits': current_user.credits,
                 'required_credits': total_cost
             }), 500
+
+        # 记录API密钥的前几位（用于调试，不泄露完整密钥）
+        current_app.logger.info(f"使用API密钥: {api_key[:10]}...{api_key[-4:]}")
             
         headers = {
             "Content-Type": "application/json",
@@ -225,11 +228,11 @@ def generate_creation(current_user):
         }
         
         payload = {
-            "stream": True,
+            "stream": False,  # 禁用流式响应，简化处理
             "model": "gpt-4o-image-vip",
             "messages": [
                 {
-                    "role": "user", 
+                    "role": "user",
                     "content": f"画一个简单的儿童涂色线条画：{prompt}。要求：黑白线条，无填充色彩，清晰轮廓，适合儿童涂色，白色背景"
                 }
             ]
@@ -242,8 +245,18 @@ def generate_creation(current_user):
         for attempt in range(max_retries):
             try:
                 current_app.logger.info(f"开始API调用，尝试次数: {attempt + 1}/{max_retries}")
-                # 使用简单的requests调用
-                response = requests.post(api_endpoint, headers=headers, json=payload, timeout=90)
+
+                # 添加开始时间记录
+                import time
+                start_time = time.time()
+
+                # 使用简单的requests调用，减少超时时间
+                response = requests.post(api_endpoint, headers=headers, json=payload, timeout=30)
+
+                # 记录API调用耗时
+                end_time = time.time()
+                duration = end_time - start_time
+                current_app.logger.info(f"API调用完成，耗时: {duration:.2f}秒")
                 current_app.logger.info(f"API响应状态码: {response.status_code}")
                 current_app.logger.info(f"API响应内容长度: {len(response.text)}")
 
