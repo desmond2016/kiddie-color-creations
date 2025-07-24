@@ -123,24 +123,25 @@ def extract_image_url_from_stream(content):
         # 方法1: 尝试JSON解析（新增）
         try:
             current_app.logger.info("尝试JSON解析...")
-            json_response = json.loads(content)
-            current_app.logger.info(f"JSON解析成功，结构: {type(json_response)}")
+            # 使用json模块解析，避免变量名冲突
+            parsed_json = json.loads(content)
+            current_app.logger.info(f"JSON解析成功，结构: {type(parsed_json)}")
 
             # 查找常见的图片URL字段
             url_fields = ['url', 'image_url', 'imageUrl', 'image', 'src']
 
             # 如果是字典，直接查找
-            if isinstance(json_response, dict):
+            if isinstance(parsed_json, dict):
                 for field in url_fields:
-                    if field in json_response and json_response[field]:
-                        url = json_response[field]
+                    if field in parsed_json and parsed_json[field]:
+                        url = parsed_json[field]
                         if isinstance(url, str) and url.startswith('http'):
                             current_app.logger.info(f"从JSON字段'{field}'找到URL: {url}")
                             return clean_extracted_url(url)
 
                 # 查找data数组
-                if 'data' in json_response and isinstance(json_response['data'], list):
-                    for item in json_response['data']:
+                if 'data' in parsed_json and isinstance(parsed_json['data'], list):
+                    for item in parsed_json['data']:
                         if isinstance(item, dict):
                             for field in url_fields:
                                 if field in item and item[field]:
@@ -150,8 +151,8 @@ def extract_image_url_from_stream(content):
                                         return clean_extracted_url(url)
 
                 # 查找choices数组（ChatGPT格式）
-                if 'choices' in json_response and isinstance(json_response['choices'], list):
-                    for choice in json_response['choices']:
+                if 'choices' in parsed_json and isinstance(parsed_json['choices'], list):
+                    for choice in parsed_json['choices']:
                         if isinstance(choice, dict) and 'message' in choice:
                             message = choice['message']
                             if isinstance(message, dict) and 'content' in message:
