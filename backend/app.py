@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
+import sys
 from datetime import timedelta
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -202,24 +203,46 @@ if __name__ == '__main__':
 
 # 为生产环境（如Render）初始化数据库
 def initialize_database():
-    """在处理第一个请求之前初始化数据库"""
+    """在处理第一个请求之前初始化数据库（改进版，避免重复初始化）"""
     try:
-        # 创建所有表
+        print("=== 数据库初始化检查 ===")
+        print(f"Python版本: {sys.version.split()[0]}")
+        print(f"数据库URI: {app.config['SQLALCHEMY_DATABASE_URI']}")
+        print(f"工作目录: {os.getcwd()}")
+
+        # 创建所有表（如果不存在）
         db.create_all()
-        
-        # 初始化管理员密码
-        if not Setting.query.get('admin_password'):
+        print("数据库表结构检查完成")
+
+        # 检查数据库是否已有数据
+        user_count = User.query.count()
+        setting_count = Setting.query.count()
+        print(f"当前用户数量: {user_count}")
+        print(f"当前设置数量: {setting_count}")
+
+        # 只有在完全空数据库时才初始化
+        if user_count == 0 and setting_count == 0:
+            print("检测到空数据库，开始初始化...")
+
+            # 初始化管理员密码
             initial_password = app.config['ADMIN_PASSWORD']
             Setting.set_password('admin_password', initial_password)
             print(f"管理员密码已初始化: {initial_password}")
 
-        # 创建测试用户（如果没有用户）
-        if User.query.count() == 0:
+            # 创建测试用户
             test_user = User(username='testuser', email='test@example.com', credits=50)
             test_user.set_password('123456')
             db.session.add(test_user)
             db.session.commit()
             print("测试用户创建成功: testuser/123456")
+        else:
+            print("数据库已有数据，跳过初始化")
+            # 检查管理员密码是否存在
+            if not Setting.query.get('admin_password'):
+                print("警告：管理员密码设置缺失，正在修复...")
+                initial_password = app.config['ADMIN_PASSWORD']
+                Setting.set_password('admin_password', initial_password)
+                print(f"管理员密码已修复: {initial_password}")
 
     except Exception as e:
         print(f"数据库初始化时发生错误: {e}")
