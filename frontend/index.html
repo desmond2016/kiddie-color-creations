@@ -484,8 +484,8 @@
         const loadingIndicator = document.getElementById('loading-indicator');
         const downloadLink = document.getElementById('download-link');
         const errorMessage = document.getElementById('error-message');
-        const colorSwatchesContainer = document.getElementById('color-swatches-container');
-        const paletteLoadingIndicator = document.getElementById('palette-loading-indicator');
+        const colorSwatchesContainer = document.getElementById('color-swatches-container'); // 可能为null，已删除
+        const paletteLoadingIndicator = document.getElementById('palette-loading-indicator'); // 可能为null，已删除
 
         // 状态管理变量
         let currentImageData = {
@@ -535,8 +535,8 @@
                 console.log('恢复图片显示');
             }
 
-            // 恢复配色方案显示
-            if (currentColorPalette.length > 0) {
+            // 恢复配色方案显示（如果配色容器存在）
+            if (currentColorPalette.length > 0 && colorSwatchesContainer) {
                 colorSwatchesContainer.innerHTML = '';
                 currentColorPalette.forEach(color => {
                     const colorSwatch = document.createElement('span');
@@ -550,6 +550,8 @@
                     colorSwatchesContainer.appendChild(colorSwatch);
                 });
                 console.log('恢复配色方案显示');
+            } else if (currentColorPalette.length > 0) {
+                console.log('配色容器不存在，跳过配色方案恢复');
             }
         }
 
@@ -653,7 +655,9 @@
             mainImage.style.display = 'none'; // 隐藏旧图片
             generateButton.disabled = true;
             generateButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 生成中...';
-            paletteLoadingIndicator.style.display = 'block';
+            if (paletteLoadingIndicator) {
+                paletteLoadingIndicator.style.display = 'block';
+            }
             hideMessage('error-message');
 
             try {
@@ -891,16 +895,23 @@
                     }
 
                     loadingIndicator.style.display = 'none';
-                    paletteLoadingIndicator.style.display = 'none';
+                    if (paletteLoadingIndicator) {
+                        paletteLoadingIndicator.style.display = 'none';
+                    }
                     mainImage.style.opacity = '1';
                     generateButton.disabled = false;
                     generateButton.innerHTML = '<i class="fas fa-magic"></i> 生成线条画';
                 }
         }
 
-        // 更新配色方案显示
+        // 更新配色方案显示（已废弃，配色容器已删除）
         function updateColorSwatches(colors) {
             const colorSwatchesContainer = document.getElementById('color-swatches-container');
+            if (!colorSwatchesContainer) {
+                console.log('配色容器不存在，跳过配色更新');
+                return;
+            }
+
             colorSwatchesContainer.innerHTML = '';
 
             if (colors && Array.isArray(colors)) {
@@ -918,14 +929,18 @@
             }
         }
 
-        // 更新配色方案的函数
+        // 更新配色方案的函数（已废弃，配色容器已删除）
         async function updateColorPalette(imageUrl) {
             const colorSwatchesContainer = document.getElementById('color-swatches-container');
             const paletteLoadingIndicator = document.getElementById('palette-loading-indicator');
             const paletteSection = document.querySelector('.color-palette-section');
 
-            colorSwatchesContainer.innerHTML = ''; // 清空现有颜色块
-            paletteLoadingIndicator.style.display = 'block'; // 显示加载指示器
+            if (colorSwatchesContainer) {
+                colorSwatchesContainer.innerHTML = ''; // 清空现有颜色块
+            }
+            if (paletteLoadingIndicator) {
+                paletteLoadingIndicator.style.display = 'block'; // 显示加载指示器
+            }
             if (paletteSection) {
                 paletteSection.style.display = 'block'; // 显示配色区域
             }
@@ -961,18 +976,19 @@
                     // 更新配色状态
                     currentColorPalette = data.colors;
 
-                    // 清空现有颜色块
-                    colorSwatchesContainer.innerHTML = '';
+                    // 清空现有颜色块（如果容器存在）
+                    if (colorSwatchesContainer) {
+                        colorSwatchesContainer.innerHTML = '';
 
-                    data.colors.forEach(color => {
-                        if (typeof color === 'string' && /^#[0-9A-F]{6}$/i.test(color)) {
-                            const swatch = document.createElement('span');
-                            swatch.className = 'swatch';
-                            swatch.style.backgroundColor = color;
-                            swatch.title = `点击复制: ${color}`;
-                            swatch.setAttribute('data-color', color);
-                            swatch.addEventListener('click', () => copyColorToClipboard(color, swatch));
-                            colorSwatchesContainer.appendChild(swatch);
+                        data.colors.forEach(color => {
+                            if (typeof color === 'string' && /^#[0-9A-F]{6}$/i.test(color)) {
+                                const swatch = document.createElement('span');
+                                swatch.className = 'swatch';
+                                swatch.style.backgroundColor = color;
+                                swatch.title = `点击复制: ${color}`;
+                                swatch.setAttribute('data-color', color);
+                                swatch.addEventListener('click', () => copyColorToClipboard(color, swatch));
+                                colorSwatchesContainer.appendChild(swatch);
                         } else {
                             console.warn(`收到的无效颜色代码: ${color}`);
                         }
@@ -1003,11 +1019,13 @@
                     console.error('刷新用户积分失败:', refreshError);
                 }
             } finally {
-                paletteLoadingIndicator.style.display = 'none';
+                if (paletteLoadingIndicator) {
+                    paletteLoadingIndicator.style.display = 'none';
+                }
             }
         }
 
-        // 显示默认颜色块（在API调用失败或初始加载时）
+        // 显示默认颜色块（在API调用失败或初始加载时）（已废弃，配色容器已删除）
         function displayDefaultColors(message) {
             const colorSwatchesContainer = document.getElementById('color-swatches-container');
             const defaultColors = ["#FFC0CB", "#DA70D6", "#87CEEB", "#AFEEEE", "#90EE90", "#FFFFE0", "#FFA07A", "#F08080"];
@@ -1015,16 +1033,20 @@
             // 更新配色状态
             currentColorPalette = defaultColors;
 
-            colorSwatchesContainer.innerHTML = '';
-            defaultColors.forEach(color => {
-                const swatch = document.createElement('span');
-                swatch.className = 'swatch';
-                swatch.style.backgroundColor = color;
-                swatch.title = color;
-                swatch.setAttribute('data-color', color);
-                swatch.addEventListener('click', () => copyColorToClipboard(color, swatch));
-                colorSwatchesContainer.appendChild(swatch);
-            });
+            if (colorSwatchesContainer) {
+                colorSwatchesContainer.innerHTML = '';
+                defaultColors.forEach(color => {
+                    const swatch = document.createElement('span');
+                    swatch.className = 'swatch';
+                    swatch.style.backgroundColor = color;
+                    swatch.title = color;
+                    swatch.setAttribute('data-color', color);
+                    swatch.addEventListener('click', () => copyColorToClipboard(color, swatch));
+                    colorSwatchesContainer.appendChild(swatch);
+                });
+            } else {
+                console.log('配色容器不存在，跳过默认配色显示');
+            }
 
             // 保存配色状态
             saveCurrentState();
