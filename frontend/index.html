@@ -989,10 +989,10 @@
                                 swatch.setAttribute('data-color', color);
                                 swatch.addEventListener('click', () => copyColorToClipboard(color, swatch));
                                 colorSwatchesContainer.appendChild(swatch);
-                        } else {
-                            console.warn(`收到的无效颜色代码: ${color}`);
-                        }
-                    });
+                            } else {
+                                console.warn(`收到的无效颜色代码: ${color}`);
+                            }
+                        });
 
                     console.log('配色生成成功，准备刷新用户积分');
 
