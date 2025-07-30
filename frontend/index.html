@@ -209,7 +209,7 @@
                     <!-- 积分消费提示 -->
                     <div id="credits-info" class="credits-info">
                         <i class="fas fa-coins"></i>
-                        <span>生成1张图片+1套配色方案需要 2 积分</span>
+                        <span>生成1张图片需要1积分</span>
                     </div>
 
                     <!-- 登录提示 -->
@@ -235,31 +235,7 @@
             </div>
         </section>
 
-        <section class="color-palette-section">
-            <div class="container">
-                <h2>推荐配色方案</h2>
-                <p class="section-subtitle">点击下方颜色块，获取灵感</p>
 
-                <div class="palette-loading" id="palette-loading-indicator" style="display: none;">
-                    <i class="fas fa-palette fa-spin"></i>
-                    <span>正在生成智能配色...</span>
-                </div>
-
-                <div id="color-swatches-container" class="color-swatches">
-                    <span class="swatch" style="background-color: #FFC0CB;" title="粉色"></span>
-                    <span class="swatch" style="background-color: #DA70D6;" title="紫色"></span>
-                    <span class="swatch" style="background-color: #87CEEB;" title="蓝色"></span>
-                    <span class="swatch" style="background-color: #AFEEEE;" title="青色"></span>
-                    <span class="swatch" style="background-color: #90EE90;" title="绿色"></span>
-                    <span class="swatch" style="background-color: #FFFFE0;" title="黄色"></span>
-                    <span class="swatch" style="background-color: #FFA07A;" title="橙色"></span>
-                    <span class="swatch" style="background-color: #F08080;" title="红色"></span>
-                </div>
-                <p class="palette-tip">
-                    <strong>贴心提示：</strong>发挥你的创意，为生成的线条画涂上独一无二的色彩吧！
-                </p>
-            </div>
-        </section>
     </main>
 
     <footer class="site-footer">
@@ -625,10 +601,10 @@
                     return;
                 }
 
-                // 检查积分余额（需要2积分：1积分生成图片 + 1积分生成配色）
+                // 检查积分余额（需要1积分生成图片）
                 const user = authSystem.getCurrentUser();
-                if (user.credits < 2) {
-                    showMessage('error-message', `积分余额不足，需要2积分，当前余额${user.credits}积分。请先兑换积分！`, 'error');
+                if (user.credits < 1) {
+                    showMessage('error-message', `积分余额不足，需要1积分，当前余额${user.credits}积分。请先兑换积分！`, 'error');
                     return;
                 }
 

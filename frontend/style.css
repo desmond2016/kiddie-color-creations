@@ -638,6 +638,22 @@ section {
     margin-right: 8px;
 }
 
+/* 按钮容器样式 - 确保两个按钮能够很好地并排显示 */
+.button-container {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: 20px 0;
+}
+
+/* 确保生成按钮在容器中正确显示 */
+#generate-button,
+.generate-colors-btn {
+    flex: 0 0 auto; /* 不伸缩，保持原始大小 */
+}
+
 /* 新增：错误信息样式 */
 .error-text {
     color: var(--error-color);

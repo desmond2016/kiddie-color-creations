@@ -201,7 +201,7 @@ def generate_creation(current_user):
     if len(prompt) < 2:
         return jsonify({"error": "图片描述太短，请至少输入2个字符"}), 400
 
-    total_cost = CREDIT_COSTS.get('generate_image', 1) + CREDIT_COSTS.get('generate_colors', 1)
+    total_cost = CREDIT_COSTS.get('generate_image', 1)  # 只扣除图片生成费用，配色推荐免费
     if current_user.credits < total_cost:
         return jsonify({
             'error': f"积分余额不足，需要 {total_cost} 积分，当前余额 {current_user.credits} 积分",

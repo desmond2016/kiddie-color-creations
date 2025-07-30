@@ -29,25 +29,34 @@ class ColorUI {
      * 创建配色推荐区域的HTML结构
      */
     createRecommendationSection() {
-        // 查找插入位置（在现有配色区域之后）
-        const colorPaletteSection = document.querySelector('.color-palette-section');
-        if (!colorPaletteSection) {
-            console.warn('未找到配色区域，无法插入智能配色推荐');
+        // 查找插入位置（在图片容器之后）
+        const imageContainer = document.querySelector('.image-container');
+        if (!imageContainer) {
+            console.warn('未找到图片容器，无法插入智能配色推荐');
+            return;
+        }
+
+        // 检查是否已经创建过推荐区域
+        if (document.getElementById('color-recommendation')) {
+            console.log('智能配色推荐区域已存在');
             return;
         }
 
         // 创建配色推荐区域
         const recommendationHTML = `
             <section class="color-recommendation-section" id="color-recommendation" style="display: none;">
-                <h3><i class="fas fa-palette"></i> 智能配色推荐</h3>
-                <div class="color-schemes-container" id="color-schemes-container">
-                    <!-- 配色方案将在这里动态生成 -->
+                <div class="container">
+                    <h3><i class="fas fa-palette"></i> 智能配色推荐</h3>
+                    <div class="color-schemes-container" id="color-schemes-container">
+                        <!-- 配色方案将在这里动态生成 -->
+                    </div>
                 </div>
             </section>
         `;
 
-        // 插入到配色区域之后
-        colorPaletteSection.insertAdjacentHTML('afterend', recommendationHTML);
+        // 插入到图片容器之后
+        imageContainer.insertAdjacentHTML('afterend', recommendationHTML);
+        console.log('智能配色推荐区域已创建并插入到图片容器之后');
     }
 
     /**
@@ -77,6 +86,9 @@ class ColorUI {
         const generateButton = document.getElementById('generate-button');
         if (!generateButton) return;
 
+        // 检查是否已经添加过按钮
+        if (document.querySelector('.generate-colors-btn')) return;
+
         // 创建生成配色按钮
         const colorButton = document.createElement('button');
         colorButton.type = 'button';
@@ -91,8 +103,19 @@ class ColorUI {
             }
         };
 
-        // 插入到生成图片按钮旁边
-        generateButton.parentNode.insertBefore(colorButton, generateButton.nextSibling);
+        // 创建按钮容器（如果不存在）
+        let buttonContainer = generateButton.parentNode.querySelector('.button-container');
+        if (!buttonContainer) {
+            buttonContainer = document.createElement('div');
+            buttonContainer.className = 'button-container';
+
+            // 将生成按钮移动到容器中
+            generateButton.parentNode.insertBefore(buttonContainer, generateButton);
+            buttonContainer.appendChild(generateButton);
+        }
+
+        // 将配色按钮添加到容器中
+        buttonContainer.appendChild(colorButton);
     }
 
     /**
@@ -294,32 +317,68 @@ class ColorUI {
     }
 
     /**
-     * 应用配色方案到现有的配色区域
+     * 应用配色方案 - 创建配色展示区域
      * @param {number} index - 配色方案索引
      */
     applyColorScheme(index) {
         if (!this.currentRecommendations[index]) return;
 
         const scheme = this.currentRecommendations[index];
-        
-        // 查找现有的配色区域
-        const existingSwatches = document.querySelector('.color-swatches');
-        if (existingSwatches) {
-            // 清空现有配色
-            existingSwatches.innerHTML = '';
-            
-            // 添加新配色
-            scheme.colors.forEach(color => {
-                const swatch = document.createElement('div');
-                swatch.className = 'swatch';
-                swatch.style.backgroundColor = color;
-                swatch.title = color;
-                existingSwatches.appendChild(swatch);
-            });
-            
-            this.showMessage(`已应用"${scheme.name}"配色方案`, 'success');
+
+        // 查找或创建配色展示区域
+        let colorDisplaySection = document.getElementById('applied-colors-section');
+
+        if (!colorDisplaySection) {
+            // 创建配色展示区域
+            const colorDisplayHTML = `
+                <section class="applied-colors-section" id="applied-colors-section">
+                    <div class="container">
+                        <h3><i class="fas fa-paint-brush"></i> 当前配色方案</h3>
+                        <div class="color-swatches" id="applied-color-swatches">
+                            <!-- 应用的配色将在这里显示 -->
+                        </div>
+                        <p class="palette-tip">
+                            <strong>提示：</strong>点击颜色块可以复制颜色值，用于涂色创作！
+                        </p>
+                    </div>
+                </section>
+            `;
+
+            // 插入到智能配色推荐区域之后
+            const recommendationSection = document.getElementById('color-recommendation');
+            if (recommendationSection) {
+                recommendationSection.insertAdjacentHTML('afterend', colorDisplayHTML);
+                colorDisplaySection = document.getElementById('applied-colors-section');
+            }
+        }
+
+        if (colorDisplaySection) {
+            const swatchesContainer = document.getElementById('applied-color-swatches');
+            if (swatchesContainer) {
+                // 清空现有配色
+                swatchesContainer.innerHTML = '';
+
+                // 添加新配色
+                scheme.colors.forEach(color => {
+                    const swatch = document.createElement('div');
+                    swatch.className = 'swatch';
+                    swatch.style.backgroundColor = color;
+                    swatch.title = color;
+                    swatch.dataset.color = color;
+                    swatch.onclick = () => this.copyColorToClipboard(color);
+                    swatchesContainer.appendChild(swatch);
+                });
+
+                // 显示配色展示区域
+                colorDisplaySection.style.display = 'block';
+
+                // 平滑滚动到配色展示区域
+                colorDisplaySection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+                this.showMessage(`已应用"${scheme.name}"配色方案，点击颜色块可复制颜色值`, 'success');
+            }
         } else {
-            this.showMessage('未找到配色区域，无法应用配色', 'warning');
+            this.showMessage('无法创建配色展示区域', 'warning');
         }
     }
 

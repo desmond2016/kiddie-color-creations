@@ -259,26 +259,91 @@
 
 /* ===== 生成配色按钮 ===== */
 .generate-colors-btn {
+    display: inline-block; /* 与生成线条画按钮一致 */
     background: linear-gradient(45deg, #4ECDC4, #44A08D);
     color: white;
     border: none;
-    padding: 10px 20px;
-    border-radius: 6px;
-    font-weight: 600;
+    padding: 12px 30px; /* 与生成线条画按钮一致 */
+    border-radius: 30px; /* 长椭圆形状，与生成线条画按钮一致 */
+    font-weight: bold; /* 与生成线条画按钮一致 */
     cursor: pointer;
     transition: all 0.3s ease;
     margin-left: 10px;
-    font-size: 0.9em;
+    font-size: 1.1em; /* 与生成线条画按钮一致 */
+    box-shadow: 0 0 8px rgba(68, 160, 141, 0.5), 0 0 15px rgba(68, 160, 141, 0.3) inset; /* 添加发光效果 */
+    text-shadow: 0 0 5px rgba(0,0,0,0.5); /* 与生成线条画按钮一致 */
 }
 
-.generate-colors-btn:hover {
+.generate-colors-btn:hover:not(:disabled),
+.generate-colors-btn:focus:not(:disabled) {
     background: linear-gradient(45deg, #44A08D, #4ECDC4);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(68, 160, 141, 0.4);
+    transform: translateY(-2px) scale(1.03); /* 与生成线条画按钮一致 */
+    box-shadow: 0 0 12px rgba(68, 160, 141, 0.6), 0 0 25px rgba(68, 160, 141, 0.4) inset, 0 4px 8px rgba(0,0,0,0.3); /* 与生成线条画按钮一致 */
+    outline: none;
 }
 
 .generate-colors-btn i {
-    margin-right: 5px;
+    margin-right: 8px; /* 与生成线条画按钮一致 */
+}
+
+/* ===== 应用配色展示区域 ===== */
+.applied-colors-section {
+    background: var(--bg-card-purple);
+    border-radius: 15px;
+    padding: 30px;
+    margin: 30px 0;
+    border: 1px solid rgba(255, 0, 255, 0.3);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.3), inset 0 0 10px rgba(255, 0, 255, 0.1);
+}
+
+.applied-colors-section h3 {
+    color: var(--primary-glow-color);
+    text-shadow: var(--glow-text-shadow);
+    margin-bottom: 20px;
+    text-align: center;
+    font-size: 1.6em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.applied-colors-section .color-swatches {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 20px 0;
+}
+
+.applied-colors-section .swatch {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.applied-colors-section .swatch:hover {
+    transform: scale(1.2);
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    z-index: 10;
+}
+
+.applied-colors-section .palette-tip {
+    text-align: center;
+    color: var(--text-color-medium);
+    font-size: 0.9em;
+    margin-top: 15px;
+    line-height: 1.4;
+}
+
+.applied-colors-section .palette-tip strong {
+    color: var(--primary-glow-color);
 }
 
 /* ===== 响应式设计 ===== */
@@ -305,7 +370,11 @@
     .generate-colors-btn {
         margin-left: 0;
         margin-top: 10px;
-        width: 100%;
+        width: 80%; /* 与生成线条画按钮在移动端保持一致 */
+        margin-left: auto;
+        margin-right: auto;
+        font-size: 1em; /* 移动端字体大小与生成线条画按钮一致 */
+        padding: 10px 20px; /* 移动端内边距与生成线条画按钮一致 */
     }
 }
 
@@ -322,8 +391,22 @@
     .color-scheme-card {
         padding: 15px;
     }
-    
+
     .scheme-header h4 {
         font-size: 1.1em;
+    }
+
+    .applied-colors-section {
+        padding: 20px;
+        margin: 20px 0;
+    }
+
+    .applied-colors-section h3 {
+        font-size: 1.4em;
+    }
+
+    .applied-colors-section .swatch {
+        width: 45px;
+        height: 45px;
     }
 }
