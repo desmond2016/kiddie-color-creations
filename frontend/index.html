@@ -258,9 +258,13 @@
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', () => {
             console.log('页面加载完成，初始化认证系统');
-            
-            // 初始化认证系统
-            initAuth();
+
+            // 初始化认证系统（异步）
+            initAuth().then(() => {
+                console.log('认证系统初始化完成');
+            }).catch(error => {
+                console.error('认证系统初始化失败:', error);
+            });
 
             // 绑定认证相关事件
             bindAuthEvents();

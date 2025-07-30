@@ -8,6 +8,9 @@
 let currentUser = null;
 let authToken = null;
 
+// 数据版本控制（用于清理过期缓存）
+const DATA_VERSION = '1.1'; // 积分系统更新版本
+
 // API请求函数
 async function apiRequest(endpoint, options = {}) {
     const url = `${window.CONFIG.API_BASE_URL}${endpoint}`;
@@ -49,13 +52,31 @@ function saveAuthData(token, user) {
     currentUser = user;
     localStorage.setItem('authToken', token);
     localStorage.setItem('currentUser', JSON.stringify(user));
+    localStorage.setItem('dataVersion', DATA_VERSION); // 保存数据版本
+    console.log('保存用户数据:', user.username, '积分:', user.credits);
 }
 
 function loadAuthData() {
+    // 检查数据版本，清理过期缓存
+    const storedVersion = localStorage.getItem('dataVersion');
+    if (storedVersion !== DATA_VERSION) {
+        console.log(`数据版本更新 (${storedVersion} → ${DATA_VERSION})，清理过期缓存`);
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('currentUser');
+        localStorage.setItem('dataVersion', DATA_VERSION);
+        return; // 清理后直接返回，不加载过期数据
+    }
+
     authToken = localStorage.getItem('authToken');
     const userData = localStorage.getItem('currentUser');
     if (userData) {
-        currentUser = JSON.parse(userData);
+        try {
+            currentUser = JSON.parse(userData);
+            console.log('加载缓存的用户数据:', currentUser.username, '积分:', currentUser.credits);
+        } catch (error) {
+            console.error('解析用户数据失败:', error);
+            clearAuthData();
+        }
     }
 }
 
@@ -85,8 +106,8 @@ function updateUI() {
         document.getElementById('username-display').textContent = currentUser.username;
         document.getElementById('credits-count').textContent = currentUser.credits;
         
-        // 检查积分余额（需要2积分：图片+配色）
-        if (currentUser.credits < 2) {
+        // 检查积分余额（需要1积分：图片生成，配色推荐免费）
+        if (currentUser.credits < 1) {
             generateButton.disabled = true;
             generateButton.innerHTML = '<i class="fas fa-coins"></i> 积分不足';
         }
@@ -352,9 +373,22 @@ const authSystem = {
 };
 
 // 初始化认证系统
-function initAuth() {
+async function initAuth() {
     loadAuthData();
-    updateUI();
+
+    // 如果用户已登录，从后端刷新最新的用户信息（包括积分）
+    if (currentUser && authToken) {
+        try {
+            console.log('初始化时刷新用户信息，确保积分数据最新');
+            await refreshUserInfo();
+        } catch (error) {
+            console.warn('初始化时刷新用户信息失败，使用缓存数据:', error);
+            // 如果刷新失败，仍然使用缓存的数据
+            updateUI();
+        }
+    } else {
+        updateUI();
+    }
 }
 
 // 导出到全局
