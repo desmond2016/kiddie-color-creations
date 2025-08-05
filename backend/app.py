@@ -17,8 +17,15 @@ from image_proxy import image_proxy_bp
 
 load_dotenv()
 
+# 设置系统编码为UTF-8，解决Windows编码问题
+os.environ['PYTHONIOENCODING'] = 'utf-8'
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
 # --- Flask 应用设置 ---
-app = Flask(__name__, static_folder='static', static_url_path='/static')
+app = Flask(__name__, static_folder='../frontend', static_url_path='/')
 
 # 配置日志级别
 import logging
@@ -38,21 +45,52 @@ app.config['SECRET_KEY'] = get_env_variable('SECRET_KEY', 'dev-secret-key-change
 app.config['JWT_SECRET_KEY'] = get_env_variable('JWT_SECRET_KEY', 'dev-jwt-secret-change-in-production')
 app.config['ADMIN_PASSWORD'] = get_env_variable('ADMIN_PASSWORD', 'admin123') # 用于首次初始化
 
+# Supabase 配置 (可选，用于生产环境)
+app.config['SUPABASE_URL'] = os.getenv('SUPABASE_URL')
+app.config['SUPABASE_ANON_KEY'] = os.getenv('SUPABASE_ANON_KEY')
+app.config['SUPABASE_SERVICE_KEY'] = os.getenv('SUPABASE_SERVICE_KEY')
+
 # 为不同身份设置不同的JWT过期时间
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=7) # 普通用户
 app.config['ADMIN_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1) # 管理员
 
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:////tmp/kiddie_color_creations.db')
+# 数据库配置 - 优先使用环境变量中的DATABASE_URL
+database_url = get_env_variable('DATABASE_URL')
+
+if not database_url:
+    # 如果没有设置DATABASE_URL环境变量，则使用Supabase连接参数构建
+    import urllib.parse
+    db_user = "postgres"
+    db_password = urllib.parse.quote_plus("t5O4sH9UJxXJf3sQ")
+    db_host = "db.fvbifgzxwvaffyuzaegr.supabase.co"
+    db_port = "5432"
+    db_name = "postgres"
+    database_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+print(f"使用数据库: {database_url[:50]}...")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# 优化数据库连接池配置以减少内存使用
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'pool_size': 3,          # 减少连接池大小
-    'pool_recycle': 300,     # 5分钟回收连接
-    'pool_pre_ping': True,   # 连接前检查
-    'max_overflow': 0,       # 不允许超出连接池
-    'pool_timeout': 20       # 连接超时时间
-}
+# 数据库连接池配置 (适用于SQLite和PostgreSQL)
+database_url = app.config['SQLALCHEMY_DATABASE_URI']
+if database_url.startswith('postgresql'):
+    # PostgreSQL/Supabase 配置
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_size': 5,          # PostgreSQL连接池大小
+        'pool_recycle': 3600,    # 1小时回收连接
+        'pool_pre_ping': True,   # 连接前检查
+        'max_overflow': 10,      # 允许超出连接池
+        'pool_timeout': 30       # 连接超时时间
+    }
+else:
+    # SQLite 配置
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_size': 3,          # 减少连接池大小
+        'pool_recycle': 300,     # 5分钟回收连接
+        'pool_pre_ping': True,   # 连接前检查
+        'max_overflow': 0,       # 不允许超出连接池
+        'pool_timeout': 20       # 连接超时时间
+    }
 app.config['ADMIN_USERNAME'] = os.getenv('ADMIN_USERNAME', 'admin')
 
 # --- 初始化扩展 ---
@@ -125,12 +163,14 @@ def init_db_seed():
 # --- 通用API路由 ---
 @app.route('/', methods=['GET'])
 def root():
-    return jsonify({'message': 'Kiddie Color Creations API is running!', 'version': '1.0.0'}), 200
+    from flask import send_from_directory
+    return send_from_directory('../frontend', 'index.html')
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
     try:
-        db.session.execute('SELECT 1')
+        from sqlalchemy import text
+        db.session.execute(text('SELECT 1'))
         db_status = 'connected'
     except Exception:
         db_status = 'disconnected'
@@ -168,34 +208,9 @@ if __name__ == '__main__':
     print(f"管理员用户名: {app.config['ADMIN_USERNAME']}")
     print("="*50)
     
-    # 初始化数据库
-    with app.app_context():
-        try:
-            # 创建所有表
-            db.create_all()
-            print("数据库表创建成功")
-            
-            # 初始化管理员密码
-            if not Setting.query.get('admin_password'):
-                print("初始化管理员密码...")
-                initial_password = app.config['ADMIN_PASSWORD']
-                Setting.set_password('admin_password', initial_password)
-                print(f"管理员密码已初始化: {initial_password}")
-
-            # 创建测试用户（如果没有用户）
-            if User.query.count() == 0:
-                print("创建测试用户...")
-                test_user = User(username='testuser', email='test@example.com', credits=50)
-                test_user.set_password('123456')
-                db.session.add(test_user)
-                db.session.commit()
-                print("测试用户创建成功: testuser/123456")
-            else:
-                print("数据库中已存在用户，跳过创建测试用户。")
-
-        except Exception as e:
-            print(f"数据库初始化时发生错误: {e}")
-            traceback.print_exc()
+    # 跳过启动时的数据库初始化，避免编码问题
+    print("🔄 跳过启动时数据库初始化，数据库表已在Supabase中手动创建")
+    print("📝 管理员密码和测试数据已通过SQL脚本预设")
     
     flask_debug = os.getenv("FLASK_DEBUG", "False").lower() in ("true", "1", "t")
     port = int(os.getenv("PORT", 5000))
@@ -249,5 +264,6 @@ def initialize_database():
         traceback.print_exc()
 
 # 在应用启动时初始化数据库（适用于生产环境）
-with app.app_context():
-    initialize_database()
+# 临时注释掉，使用SQLite测试模式
+# with app.app_context():
+#     initialize_database()
