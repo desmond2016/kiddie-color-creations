@@ -55,17 +55,18 @@ app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=7) # 普通用户
 app.config['ADMIN_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1) # 管理员
 
 # 数据库配置 - 优先使用环境变量中的DATABASE_URL
-database_url = get_env_variable('DATABASE_URL')
+database_url = os.getenv('DATABASE_URL')
 
 if not database_url:
-    # 如果没有设置DATABASE_URL环境变量，则使用Supabase连接参数构建
+    # 如果没有设置DATABASE_URL环境变量，则使用Supabase连接池参数构建
     import urllib.parse
     db_user = "postgres"
     db_password = urllib.parse.quote_plus("t5O4sH9UJxXJf3sQ")
     db_host = "db.fvbifgzxwvaffyuzaegr.supabase.co"
-    db_port = "5432"
+    db_port = "6543"  # 使用连接池端口
     db_name = "postgres"
     database_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+    print("⚠️  未找到DATABASE_URL环境变量，使用默认Supabase连接池配置")
 
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 print(f"使用数据库: {database_url[:50]}...")
@@ -197,9 +198,7 @@ def internal_error(error):
     db.session.rollback()
     return jsonify({'error': '服务器内部错误'}), 500
 
-@app.after_request
-def after_request(response):
-    return response
+# 重复的after_request装饰器已移除
 
 if __name__ == '__main__':
     print("="*50)
@@ -216,52 +215,50 @@ if __name__ == '__main__':
     port = int(os.getenv("PORT", 5000))
     app.run(debug=flask_debug, host='0.0.0.0', port=port)
 
-# 为生产环境（如Render）初始化数据库
+# 为生产环境（如Render）初始化数据库 - 优化版本
 def initialize_database():
-    """在处理第一个请求之前初始化数据库（改进版，避免重复初始化）"""
+    """在处理第一个请求之前初始化数据库（优化版，快速启动）"""
     try:
-        print("=== 数据库初始化检查 ===")
-        print(f"Python版本: {sys.version.split()[0]}")
-        print(f"数据库URI: {app.config['SQLALCHEMY_DATABASE_URI']}")
-        print(f"工作目录: {os.getcwd()}")
+        print("=== 数据库快速检查 ===")
+        print(f"数据库URI: {app.config['SQLALCHEMY_DATABASE_URI'][:50]}...")
 
-        # 创建所有表（如果不存在）
+        # 快速检查：只创建表，不进行复杂查询
         db.create_all()
         print("数据库表结构检查完成")
 
-        # 检查数据库是否已有数据
-        user_count = User.query.count()
-        setting_count = Setting.query.count()
-        print(f"当前用户数量: {user_count}")
-        print(f"当前设置数量: {setting_count}")
-
-        # 只有在完全空数据库时才初始化
-        if user_count == 0 and setting_count == 0:
-            print("检测到空数据库，开始初始化...")
-
-            # 初始化管理员密码
-            initial_password = app.config['ADMIN_PASSWORD']
-            Setting.set_password('admin_password', initial_password)
-            print(f"管理员密码已初始化: {initial_password}")
-
-            # 创建测试用户
-            test_user = User(username='testuser', email='test@example.com', credits=50)
-            test_user.set_password('123456')
-            db.session.add(test_user)
-            db.session.commit()
-            print("测试用户创建成功: testuser/123456")
-        else:
-            print("数据库已有数据，跳过初始化")
-            # 检查管理员密码是否存在
-            if not Setting.query.get('admin_password'):
-                print("警告：管理员密码设置缺失，正在修复...")
+        # 简化的初始化：只在必要时创建管理员密码
+        try:
+            # 快速检查管理员密码是否存在
+            admin_setting = Setting.query.filter_by(key='admin_password').first()
+            if not admin_setting:
+                print("创建管理员密码设置...")
                 initial_password = app.config['ADMIN_PASSWORD']
                 Setting.set_password('admin_password', initial_password)
-                print(f"管理员密码已修复: {initial_password}")
+                print(f"管理员密码已初始化: {initial_password}")
+            else:
+                print("管理员密码已存在")
+
+            # 快速检查是否需要创建测试用户
+            if User.query.count() == 0:
+                print("创建测试用户...")
+                test_user = User(username='testuser', email='test@example.com', credits=50)
+                test_user.set_password('123456')
+                db.session.add(test_user)
+                db.session.commit()
+                print("测试用户创建成功: testuser/123456")
+            else:
+                print("数据库已有用户数据")
+
+        except Exception as query_error:
+            print(f"数据库查询错误（可能是连接问题）: {query_error}")
+            # 不阻止应用启动
+
+        print("数据库初始化检查完成")
 
     except Exception as e:
         print(f"数据库初始化时发生错误: {e}")
-        traceback.print_exc()
+        # 不阻止应用启动，只记录错误
+        print("应用将继续启动，数据库问题可能需要手动解决")
 
 # 在应用启动时初始化数据库（适用于生产环境）
 # 临时注释掉，使用SQLite测试模式
