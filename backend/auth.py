@@ -12,6 +12,7 @@ from marshmallow import Schema, fields, ValidationError
 import re
 
 from models import db, User, CreditTransaction
+from models_supabase import UserSupabase, RedemptionCodeSupabase
 
 # 创建认证蓝图
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
@@ -50,10 +51,19 @@ def auth_required(f):
     def decorated_function(*args, **kwargs):
         try:
             current_user_id = int(get_jwt_identity())  # 转换为整数
-            current_user = User.query.get(current_user_id)
-            if not current_user or not current_user.is_active:
-                return jsonify({'error': '用户不存在或已被禁用'}), 401
-            return f(current_user, *args, **kwargs)
+            # 使用Supabase获取用户信息
+            from supabase_client import get_supabase_manager
+            manager = get_supabase_manager()
+            result = manager.client.table('users').select('*').eq('id', current_user_id).execute()
+
+            if not result.data:
+                return jsonify({'error': '用户不存在'}), 401
+
+            current_user_data = result.data[0]
+            if not current_user_data.get('is_active', True):
+                return jsonify({'error': '用户已被禁用'}), 401
+
+            return f(current_user_data, *args, **kwargs)
         except Exception as e:
             return jsonify({'error': '认证失败'}), 401
     return decorated_function
@@ -81,50 +91,45 @@ def register():
             return jsonify({'error': msg}), 400
         
         # 检查用户名和邮箱是否已存在
-        if User.query.filter_by(username=username).first():
+        if UserSupabase.get_by_username(username):
             return jsonify({'error': '用户名已存在'}), 400
-        
-        if User.query.filter_by(email=email).first():
+
+        if UserSupabase.get_by_email(email):
             return jsonify({'error': '邮箱已被注册'}), 400
-        
+
         # 创建新用户
-        user = User(
+        user_data = UserSupabase.create(
             username=username,
             email=email,
+            password=password,
             credits=10  # 新用户赠送10积分
         )
-        user.set_password(password)
-        
-        db.session.add(user)
-        db.session.commit()
-        
-        # 记录赠送积分
-        if user.credits > 0:
-            transaction = CreditTransaction(
-                user_id=user.id,
-                transaction_type='recharge',
-                credits_amount=user.credits,
-                description='新用户注册赠送'
-            )
-            db.session.add(transaction)
-            db.session.commit()
-        
+
+        if not user_data:
+            return jsonify({'error': '用户创建失败'}), 500
+
         # 生成访问令牌
         access_token = create_access_token(
-            identity=str(user.id),
+            identity=str(user_data['id']),
             expires_delta=timedelta(days=7)
         )
-        
+
         return jsonify({
             'message': '注册成功',
             'access_token': access_token,
-            'user': user.to_dict()
+            'user': {
+                'id': user_data['id'],
+                'username': user_data['username'],
+                'email': user_data['email'],
+                'credits': user_data['credits'],
+                'created_at': user_data['created_at'],
+                'last_login': user_data.get('last_login')
+            }
         }), 201
         
     except ValidationError as e:
         return jsonify({'error': '输入数据格式错误', 'details': e.messages}), 400
     except Exception as e:
-        db.session.rollback()
         current_app.logger.error(f"注册错误: {str(e)}")
         return jsonify({'error': '注册失败，请稍后重试'}), 500
 
@@ -140,34 +145,40 @@ def login():
         password = data['password']
         
         # 查找用户（支持用户名或邮箱登录）
-        user = None
+        user_data = None
         if '@' in login_input:
             # 邮箱登录
-            user = User.query.filter_by(email=login_input.lower()).first()
+            user_data = UserSupabase.get_by_email(login_input.lower())
         else:
             # 用户名登录
-            user = User.query.filter_by(username=login_input).first()
-        
-        if not user or not user.check_password(password):
+            user_data = UserSupabase.get_by_username(login_input)
+
+        if not user_data or not UserSupabase.check_password(user_data, password):
             return jsonify({'error': '用户名/邮箱或密码错误'}), 401
-        
-        if not user.is_active:
+
+        if not user_data.get('is_active', True):
             return jsonify({'error': '账户已被禁用'}), 401
-        
+
         # 更新最后登录时间
-        user.last_login = datetime.utcnow()
-        db.session.commit()
-        
+        UserSupabase.update_last_login(user_data['id'])
+
         # 生成访问令牌
         access_token = create_access_token(
-            identity=str(user.id),
+            identity=str(user_data['id']),
             expires_delta=timedelta(days=7)
         )
-        
+
         return jsonify({
             'message': '登录成功',
             'access_token': access_token,
-            'user': user.to_dict()
+            'user': {
+                'id': user_data['id'],
+                'username': user_data['username'],
+                'email': user_data['email'],
+                'credits': user_data['credits'],
+                'created_at': user_data['created_at'],
+                'last_login': datetime.now().isoformat()
+            }
         }), 200
         
     except ValidationError as e:
@@ -178,11 +189,18 @@ def login():
 
 @auth_bp.route('/profile', methods=['GET'])
 @auth_required
-def get_profile(current_user):
+def get_profile(current_user_data):
     """获取用户信息"""
     try:
         return jsonify({
-            'user': current_user.to_dict()
+            'user': {
+                'id': current_user_data['id'],
+                'username': current_user_data['username'],
+                'email': current_user_data['email'],
+                'credits': current_user_data['credits'],
+                'created_at': current_user_data['created_at'],
+                'last_login': current_user_data.get('last_login')
+            }
         }), 200
     except Exception as e:
         current_app.logger.error(f"获取用户信息错误: {str(e)}")

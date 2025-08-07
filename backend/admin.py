@@ -8,6 +8,7 @@ import traceback
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 
 from models import db, User, RedemptionCode, CreditTransaction, Setting
+from models_supabase import UserSupabase, SettingSupabase, RedemptionCodeSupabase
 
 # 创建管理员蓝图
 admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
@@ -47,14 +48,14 @@ def admin_login():
             
         # 检查密码（需要确保数据库中有admin_password设置）
         try:
-            password_valid = Setting.check_password('admin_password', password)
+            password_valid = SettingSupabase.check_password('admin_password', password)
         except Exception as e:
             current_app.logger.error(f"检查管理员密码时出错: {e}")
             # 如果没有设置密码，使用配置中的默认密码
             default_password = current_app.config.get('ADMIN_PASSWORD', 'admin123')
             if password == default_password:
                 # 初始化密码到数据库
-                Setting.set_password('admin_password', password)
+                SettingSupabase.set_password('admin_password', password)
                 password_valid = True
             else:
                 password_valid = False
@@ -87,16 +88,15 @@ def admin_change_password():
 
         if not current_password or not new_password:
             return jsonify({"error": "当前密码和新密码都不能为空"}), 400
-        if not Setting.check_password('admin_password', current_password):
+        if not SettingSupabase.check_password('admin_password', current_password):
             return jsonify({"error": "当前密码错误"}), 400
         if len(new_password) < 6:
             return jsonify({"error": "新密码长度至少6位"}), 400
 
-        Setting.set_password('admin_password', new_password)
+        SettingSupabase.set_password('admin_password', new_password)
         current_app.logger.info("管理员密码已成功修改")
         return jsonify({"success": True, "message": "管理员密码修改成功"}), 200
     except Exception as e:
-        db.session.rollback()
         current_app.logger.error(f"管理员密码修改失败: {e}")
         return jsonify({"error": "密码修改失败"}), 500
 
@@ -106,28 +106,30 @@ def admin_change_password():
 def get_users():
     """获取用户列表"""
     try:
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 10, type=int)
-        search = request.args.get('search', '').strip()
+        # 获取所有用户（简化版本，不支持分页和搜索）
+        users_data = UserSupabase.get_all()
 
-        query = User.query
-        if search:
-            query = query.filter(db.or_(User.username.ilike(f'%{search}%'), User.email.ilike(f'%{search}%')))
-
-        pagination = query.order_by(User.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
-        
-        users_data = []
-        for user in pagination.items:
-            user_dict = user.to_dict()
-            user_dict['is_active_text'] = '活跃' if user.is_active else '禁用'
-            users_data.append(user_dict)
+        # 格式化用户数据
+        formatted_users = []
+        for user in users_data:
+            user_dict = {
+                'id': user['id'],
+                'username': user['username'],
+                'email': user['email'],
+                'credits': user['credits'],
+                'is_active': user.get('is_active', True),
+                'is_active_text': '活跃' if user.get('is_active', True) else '禁用',
+                'created_at': user['created_at'],
+                'last_login': user.get('last_login')
+            }
+            formatted_users.append(user_dict)
 
         return jsonify({
-            'users': users_data,
+            'users': formatted_users,
             'pagination': {
-                'page': pagination.page, 'per_page': pagination.per_page,
-                'total': pagination.total, 'pages': pagination.pages,
-                'has_next': pagination.has_next, 'has_prev': pagination.has_prev
+                'page': 1, 'per_page': len(formatted_users),
+                'total': len(formatted_users), 'pages': 1,
+                'has_next': False, 'has_prev': False
             }
         }), 200
     except Exception as e:
@@ -139,17 +141,39 @@ def get_users():
 def get_user_detail(user_id):
     """获取用户详细信息"""
     try:
-        user = User.query.get_or_404(user_id)
-        transactions = CreditTransaction.query.filter_by(user_id=user_id).order_by(CreditTransaction.created_at.desc()).limit(50).all()
-        used_codes = RedemptionCode.query.filter_by(used_by_user_id=user_id).order_by(RedemptionCode.used_at.desc()).all()
+        # 获取用户信息
+        from supabase_client import get_supabase_manager
+        manager = get_supabase_manager()
 
-        user_data = user.to_dict()
-        user_data.update({
-            'transactions': [t.to_dict() for t in transactions],
-            'used_codes': [code.to_dict() for code in used_codes],
-            'is_active_text': '活跃' if user.is_active else '禁用'
-        })
-        return jsonify({'user': user_data}), 200
+        # 获取用户基本信息
+        user_result = manager.client.table('users').select('*').eq('id', user_id).execute()
+        if not user_result.data:
+            return jsonify({"error": "用户不存在"}), 404
+
+        user_data = user_result.data[0]
+
+        # 获取交易记录
+        from models_supabase import CreditTransactionSupabase
+        transactions = CreditTransactionSupabase.get_by_user(user_id)
+
+        # 获取使用的兑换码
+        used_codes_result = manager.client.table('redemption_codes').select('*').eq('used_by_user_id', user_id).execute()
+        used_codes = used_codes_result.data
+
+        formatted_user_data = {
+            'id': user_data['id'],
+            'username': user_data['username'],
+            'email': user_data['email'],
+            'credits': user_data['credits'],
+            'is_active': user_data.get('is_active', True),
+            'is_active_text': '活跃' if user_data.get('is_active', True) else '禁用',
+            'created_at': user_data['created_at'],
+            'last_login': user_data.get('last_login'),
+            'transactions': transactions,
+            'used_codes': used_codes
+        }
+
+        return jsonify({'user': formatted_user_data}), 200
     except Exception as e:
         current_app.logger.error(f"获取用户详情失败: {e}")
         return jsonify({"error": "获取用户详情失败"}), 500
@@ -165,17 +189,29 @@ def adjust_user_credits(user_id):
 
         if amount == 0: return jsonify({'error': '调整数量不能为0'}), 400
         
-        user = User.query.get_or_404(user_id)
+        # 检查用户是否存在
+        from supabase_client import get_supabase_manager
+        manager = get_supabase_manager()
+        user_result = manager.client.table('users').select('*').eq('id', user_id).execute()
+        if not user_result.data:
+            return jsonify({'error': '用户不存在'}), 404
+
         if amount > 0:
-            transaction = user.add_credits(amount, f"管理员���加: {description}")
+            success = UserSupabase.add_credits(user_id, amount, f"管理员增加: {description}")
         else:
-            if user.credits < abs(amount): return jsonify({'error': '用户积分不足，无法扣减'}), 400
-            transaction = user.consume_credits(abs(amount), f"管理员扣减: {description}")
-        
-        db.session.commit()
-        return jsonify({'message': '积分调整成功', 'user': user.to_dict(), 'transaction': transaction.to_dict()}), 200
+            success = UserSupabase.consume_credits(user_id, abs(amount), f"管理员扣减: {description}")
+
+        if success:
+            # 获取更新后的用户信息
+            updated_user = manager.client.table('users').select('*').eq('id', user_id).execute()
+            return jsonify({
+                'message': '积分调整成功',
+                'user': updated_user.data[0] if updated_user.data else None
+            }), 200
+        else:
+            return jsonify({'error': '积分调整失败'}), 400
+
     except Exception as e:
-        db.session.rollback()
         current_app.logger.error(f"调整用户积分失败: {e}")
         return jsonify({'error': '调整积分失败'}), 500
 

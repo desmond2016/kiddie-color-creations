@@ -170,9 +170,14 @@ def root():
 @app.route('/api/health', methods=['GET'])
 def health_check():
     try:
-        from sqlalchemy import text
-        db.session.execute(text('SELECT 1'))
-        db_status = 'connected'
+        # 使用Supabase REST API进行健康检查
+        from supabase_client import get_supabase_manager
+        manager = get_supabase_manager()
+
+        if manager.is_connected() and manager.test_connection():
+            db_status = 'connected'
+        else:
+            db_status = 'disconnected'
     except Exception:
         db_status = 'disconnected'
     return jsonify({'status': 'healthy', 'database': db_status}), 200
@@ -217,48 +222,64 @@ if __name__ == '__main__':
 
 # 为生产环境（如Render）初始化数据库 - 优化版本
 def initialize_database():
-    """在处理第一个请求之前初始化数据库（优化版，快速启动）"""
+    """使用Supabase REST API进行数据库初始化检查"""
     try:
-        print("=== 数据库快速检查 ===")
-        print(f"数据库URI: {app.config['SQLALCHEMY_DATABASE_URI'][:50]}...")
+        print("=== Supabase REST API 数据库检查 ===")
 
-        # 快速检查：只创建表，不进行复杂查询
-        db.create_all()
-        print("数据库表结构检查完成")
+        # 使用Supabase REST API进行检查
+        from supabase_client import get_supabase_manager
+        from models_supabase import SettingSupabase, UserSupabase
 
-        # 简化的初始化：只在必要时创建管理员密码
+        manager = get_supabase_manager()
+
+        if not manager.is_connected():
+            print("❌ Supabase客户端未正确初始化")
+            return
+
+        if not manager.test_connection():
+            print("❌ Supabase连接测试失败")
+            return
+
+        print("✅ Supabase REST API连接正常")
+
+        # 检查管理员密码设置
         try:
-            # 快速检查管理员密码是否存在
-            admin_setting = Setting.query.filter_by(key='admin_password').first()
-            if not admin_setting:
+            admin_password = SettingSupabase.get('admin_password')
+            if not admin_password:
                 print("创建管理员密码设置...")
                 initial_password = app.config['ADMIN_PASSWORD']
-                Setting.set_password('admin_password', initial_password)
+                SettingSupabase.set_password('admin_password', initial_password)
                 print(f"管理员密码已初始化: {initial_password}")
             else:
                 print("管理员密码已存在")
 
-            # 快速检查是否需要创建测试用户
-            if User.query.count() == 0:
+            # 检查用户数据
+            users = UserSupabase.get_all()
+            if len(users) == 0:
                 print("创建测试用户...")
-                test_user = User(username='testuser', email='test@example.com', credits=50)
-                test_user.set_password('123456')
-                db.session.add(test_user)
-                db.session.commit()
-                print("测试用户创建成功: testuser/123456")
+                test_user = UserSupabase.create(
+                    username='testuser',
+                    email='test@example.com',
+                    password='123456',
+                    credits=50
+                )
+                if test_user:
+                    print("测试用户创建成功: testuser/123456")
+                else:
+                    print("测试用户创建失败")
             else:
-                print("数据库已有用户数据")
+                print(f"数据库已有 {len(users)} 个用户")
 
-        except Exception as query_error:
-            print(f"数据库查询错误（可能是连接问题）: {query_error}")
+        except Exception as api_error:
+            print(f"Supabase API操作错误: {api_error}")
             # 不阻止应用启动
 
-        print("数据库初始化检查完成")
+        print("Supabase数据库初始化检查完成")
 
     except Exception as e:
         print(f"数据库初始化时发生错误: {e}")
         # 不阻止应用启动，只记录错误
-        print("应用将继续启动，数据库问题可能需要手动解决")
+        print("应用将继续启动，使用Supabase REST API模式")
 
 # 在应用启动时初始化数据库（适用于生产环境）
 # 临时注释掉，使用SQLite测试模式
